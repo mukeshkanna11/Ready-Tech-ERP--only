@@ -1,27 +1,24 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import Login from "./pages/auth/Login.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
+import { getToken } from "./services/api";
 
 function ProtectedRoute({ children }) {
-  const token = localStorage.getItem("token");
+  const token = getToken();
 
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return children;
+  return token ? children : <Navigate to="/login" replace />;
 }
 
 function App() {
   return (
     <Routes>
-      {/* First page is always Login */}
+      {/* First page */}
       <Route path="/" element={<Navigate to="/login" replace />} />
 
       {/* Login */}
       <Route path="/login" element={<Login />} />
 
-      {/* Dashboard only after successful login */}
+      {/* Protected Dashboard */}
       <Route
         path="/dashboard"
         element={
@@ -31,7 +28,7 @@ function App() {
         }
       />
 
-      {/* Unknown routes */}
+      {/* Invalid route */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
