@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 
-const roleSchema = new mongoose.Schema(
+const departmentSchema = new mongoose.Schema(
   {
-    // Workspace/tenant that owns this role. req.companyId from the JWT.
+    // Workspace/tenant that owns this department. req.companyId from the JWT.
     workspaceId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Company',
@@ -17,12 +17,6 @@ const roleSchema = new mongoose.Schema(
       maxlength: 100,
     },
 
-    description: {
-      type: String,
-      trim: true,
-      maxlength: 300,
-    },
-
     status: {
       type: String,
       enum: ['active', 'inactive'],
@@ -35,7 +29,7 @@ const roleSchema = new mongoose.Schema(
   }
 );
 
-// Role name is unique inside one workspace, not globally.
-roleSchema.index({ workspaceId: 1, name: 1 }, { unique: true });
+// Department name is unique inside one workspace, not globally.
+departmentSchema.index({ workspaceId: 1, name: 1 }, { unique: true });
 
-module.exports = mongoose.model('Role', roleSchema);
+module.exports = mongoose.model('Department', departmentSchema);

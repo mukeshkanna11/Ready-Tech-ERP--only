@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
 import {
   Search,
   Plus,
@@ -19,16 +25,11 @@ import {
   Filter,
 } from 'lucide-react';
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL?.replace(/\/$/, '') || '';
+import { getToken } from '../../services/api';
 
-const API_URL = `${API_BASE_URL}/api`;
-
-const getToken = () =>
-  localStorage.getItem('token') ||
-  localStorage.getItem('accessToken') ||
-  sessionStorage.getItem('token') ||
-  '';
+const API_URL =
+  import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
+  'https://ready-tech-erp.onrender.com/api';
 
 const apiRequest = async (endpoint, options = {}) => {
   const token = getToken();
@@ -85,16 +86,20 @@ const getInitials = (name = '') =>
     .map((part) => part.charAt(0).toUpperCase())
     .join('') || 'U';
 
-const normalizeUsers = (response) => {
+const normalizeArray = (response) => {
   if (Array.isArray(response?.data)) return response.data;
   if (Array.isArray(response)) return response;
   return [];
 };
 
+const normalizeUsers = (response) => normalizeArray(response);
+
 const getRoleName = (user) => {
   if (!user?.role) return 'No role';
 
-  if (typeof user.role === 'string') return user.role;
+  if (typeof user.role === 'string') {
+    return user.role;
+  }
 
   return (
     user.role.name ||
@@ -104,9 +109,55 @@ const getRoleName = (user) => {
   );
 };
 
+const getRoleId = (role) => {
+  if (!role) return '';
+
+  if (typeof role === 'string') {
+    return role;
+  }
+
+  return String(role._id || role.id || '');
+};
+
+const getDepartmentId = (department) => {
+  if (!department) return '';
+
+  if (typeof department === 'string') {
+    return department;
+  }
+
+  return String(department._id || department.id || '');
+};
+
+const getDepartmentName = (department) => {
+  if (!department) return '';
+
+  if (typeof department === 'string') {
+    return department;
+  }
+
+  return department.name || '';
+};
+
+const getDesignationName = (designation) => {
+  if (!designation) return '';
+
+  if (typeof designation === 'string') {
+    return designation;
+  }
+
+  return designation.name || '';
+};
+
 const Users = () => {
   const [users, setUsers] = useState([]);
+
   const [roles, setRoles] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [designations, setDesignations] = useState([]);
+
+  const [optionsLoading, setOptionsLoading] = useState(true);
+  const [designationLoading, setDesignationLoading] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -129,18 +180,31 @@ const Users = () => {
   const [selectedUser, setSelectedUser] = useState(null);
 
   const [form, setForm] = useState(EMPTY_FORM);
-  const [passwordForm, setPasswordForm] =
-    useState(EMPTY_PASSWORD_FORM);
+
+  const [passwordForm, setPasswordForm] = useState(
+    EMPTY_PASSWORD_FORM
+  );
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] =
     useState(false);
 
-  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] =
+    useState(false);
+
+  const [showNewPassword, setShowNewPassword] =
+    useState(false);
+
   const [showNewConfirmPassword, setShowNewConfirmPassword] =
     useState(false);
 
   const [confirmDelete, setConfirmDelete] = useState(null);
+
+  /*
+   * ---------------------------------------------------------
+   * USERS
+   * ---------------------------------------------------------
+   */
 
   const loadUsers = useCallback(async () => {
     try {
@@ -161,8 +225,8 @@ const Users = () => {
         params.set('role', roleFilter);
       }
 
-      params.set('page', page);
-      params.set('limit', limit);
+      params.set('page', String(page));
+      params.set('limit', String(limit));
 
       const response = await apiRequest(
         `/users?${params.toString()}`
@@ -174,37 +238,110 @@ const Users = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, roleFilter, page, limit]);
+  }, [
+    search,
+    statusFilter,
+    roleFilter,
+    page,
+    limit,
+  ]);
 
-  const loadRoles = useCallback(async () => {
+  /*
+   * ---------------------------------------------------------
+   * MASTER DATA
+   * ---------------------------------------------------------
+   */
+
+  const loadMasterData = useCallback(async () => {
     try {
-      const response = await apiRequest('/roles?status=active');
+      setOptionsLoading(true);
+      setError('');
 
-      const data = Array.isArray(response?.data)
-        ? response.data
-        : [];
+      const [rolesResponse, departmentsResponse] =
+        await Promise.all([
+          apiRequest('/roles?status=active&limit=100'),
+          apiRequest('/departments?status=active&limit=100'),
+        ]);
 
-      setRoles(data);
-    } catch {
-      // Role API is optional for rendering.
+      setRoles(normalizeArray(rolesResponse));
+      setDepartments(normalizeArray(departmentsResponse));
+    } catch (err) {
       setRoles([]);
+      setDepartments([]);
+
+      setError(
+        err.message || 'Failed to load roles and departments'
+      );
+    } finally {
+      setOptionsLoading(false);
     }
   }, []);
+
+  /*
+   * ---------------------------------------------------------
+   * DESIGNATIONS
+   * ---------------------------------------------------------
+   */
+
+  const loadDesignations = useCallback(
+    async (departmentId) => {
+      if (!departmentId) {
+        setDesignations([]);
+        return;
+      }
+
+      try {
+        setDesignationLoading(true);
+
+        const response = await apiRequest(
+          `/designations?status=active&departmentId=${encodeURIComponent(
+            departmentId
+          )}&limit=100`
+        );
+
+        setDesignations(normalizeArray(response));
+      } catch (err) {
+        setDesignations([]);
+
+        setError(
+          err.message || 'Failed to load designations'
+        );
+      } finally {
+        setDesignationLoading(false);
+      }
+    },
+    []
+  );
+
+  /*
+   * ---------------------------------------------------------
+   * INITIAL LOAD
+   * ---------------------------------------------------------
+   */
 
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
 
   useEffect(() => {
-    loadRoles();
-  }, [loadRoles]);
+    loadMasterData();
+  }, [loadMasterData]);
 
   useEffect(() => {
     if (success) {
-      const timer = setTimeout(() => setSuccess(''), 3500);
+      const timer = setTimeout(() => {
+        setSuccess('');
+      }, 3500);
+
       return () => clearTimeout(timer);
     }
   }, [success]);
+
+  /*
+   * ---------------------------------------------------------
+   * STATS
+   * ---------------------------------------------------------
+   */
 
   const stats = useMemo(() => {
     const total = users.length;
@@ -219,6 +356,7 @@ const Users = () => {
 
     const admins = users.filter((user) => {
       const role = getRoleName(user).toLowerCase();
+
       return (
         role.includes('admin') ||
         role.includes('super')
@@ -233,20 +371,38 @@ const Users = () => {
     };
   }, [users]);
 
+  /*
+   * ---------------------------------------------------------
+   * FORM
+   * ---------------------------------------------------------
+   */
+
   const resetForm = () => {
     setForm(EMPTY_FORM);
     setEditingUser(null);
+
+    setDesignations([]);
+
     setShowPassword(false);
     setShowConfirmPassword(false);
   };
 
   const openCreate = () => {
     resetForm();
-    setShowForm(true);
+
     setError('');
+    setShowForm(true);
   };
 
-  const openEdit = (user) => {
+  const openEdit = async (user) => {
+    const roleId = getRoleId(user.role);
+
+    const departmentName =
+      getDepartmentName(user.department);
+
+    const designationName =
+      getDesignationName(user.designation);
+
     setEditingUser(user);
 
     setForm({
@@ -255,17 +411,30 @@ const Users = () => {
       password: '',
       confirmPassword: '',
       phone: user.phone || '',
-      role:
-        typeof user.role === 'object'
-          ? user.role?._id || user.role?.id || ''
-          : user.role || '',
-      department: user.department || '',
-      designation: user.designation || '',
+      role: roleId,
+      department: departmentName,
+      designation: designationName,
       status: user.status || 'active',
     });
 
-    setShowForm(true);
     setError('');
+    setShowForm(true);
+
+    /*
+     * Find the current department ID from master data.
+     * Then load department-specific designations.
+     */
+    const department = departments.find(
+      (item) =>
+        String(item.name).trim().toLowerCase() ===
+        String(departmentName).trim().toLowerCase()
+    );
+
+    if (department?._id) {
+      await loadDesignations(department._id);
+    } else {
+      setDesignations([]);
+    }
   };
 
   const closeForm = () => {
@@ -281,6 +450,55 @@ const Users = () => {
       [field]: value,
     }));
   };
+
+  /*
+   * Department select stores department NAME
+   * because User.department is currently String.
+   *
+   * But API needs department ID to fetch designations.
+   */
+  const updateDepartment = async (value) => {
+    setForm((previous) => ({
+      ...previous,
+      department: value,
+      designation: '',
+    }));
+
+    setDesignations([]);
+
+    if (!value) return;
+
+    const selectedDepartment = departments.find(
+      (department) =>
+        String(department._id) === String(value)
+    );
+
+    if (!selectedDepartment?._id) return;
+
+    await loadDesignations(selectedDepartment._id);
+  };
+
+  /*
+   * Department select uses ID internally through the
+   * handler, but form keeps department NAME.
+   */
+  const selectedDepartment = useMemo(() => {
+    if (!form.department) return null;
+
+    return (
+      departments.find(
+        (department) =>
+          String(department.name).trim().toLowerCase() ===
+          String(form.department).trim().toLowerCase()
+      ) || null
+    );
+  }, [departments, form.department]);
+
+  /*
+   * ---------------------------------------------------------
+   * SUBMIT USER
+   * ---------------------------------------------------------
+   */
 
   const submitUser = async (event) => {
     event.preventDefault();
@@ -304,6 +522,14 @@ const Users = () => {
 
     if (
       form.password &&
+      form.password.length < 6
+    ) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    if (
+      form.password &&
       form.password !== form.confirmPassword
     ) {
       setError('Passwords do not match');
@@ -317,9 +543,22 @@ const Users = () => {
         name: form.name.trim(),
         email: form.email.trim().toLowerCase(),
         phone: form.phone.trim() || undefined,
-        role: form.role || undefined,
-        department: form.department.trim() || undefined,
-        designation: form.designation.trim() || undefined,
+
+        /*
+         * Backend User model field is "role".
+         * Backend controller can accept roleId.
+         */
+        roleId: form.role || undefined,
+
+        /*
+         * User model currently stores these as strings.
+         */
+        department:
+          form.department.trim() || undefined,
+
+        designation:
+          form.designation.trim() || undefined,
+
         status: form.status,
       };
 
@@ -328,10 +567,13 @@ const Users = () => {
       }
 
       if (editingUser) {
-        await apiRequest(`/users/${editingUser._id}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-        });
+        await apiRequest(
+          `/users/${editingUser._id}`,
+          {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+          }
+        );
 
         setSuccess('User updated successfully');
       } else {
@@ -344,22 +586,50 @@ const Users = () => {
       }
 
       closeForm();
+
       await loadUsers();
     } catch (err) {
-      setError(err.message || 'Unable to save user');
+      setError(
+        err.message || 'Unable to save user'
+      );
     } finally {
       setSaving(false);
     }
   };
 
+  /*
+   * ---------------------------------------------------------
+   * CHANGE PASSWORD
+   * ---------------------------------------------------------
+   */
+
   const openPasswordChange = () => {
     setPasswordForm(EMPTY_PASSWORD_FORM);
-    setShowPasswordModal(true);
+
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowNewConfirmPassword(false);
+
     setError('');
+    setShowPasswordModal(true);
+  };
+
+  const closePasswordModal = () => {
+    if (saving) return;
+
+    setShowPasswordModal(false);
+
+    setPasswordForm(EMPTY_PASSWORD_FORM);
+
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowNewConfirmPassword(false);
   };
 
   const changePassword = async (event) => {
     event.preventDefault();
+
+    setError('');
 
     if (!passwordForm.currentPassword) {
       setError('Current password is required');
@@ -367,7 +637,9 @@ const Users = () => {
     }
 
     if (passwordForm.newPassword.length < 6) {
-      setError('New password must be at least 6 characters');
+      setError(
+        'New password must be at least 6 characters'
+      );
       return;
     }
 
@@ -391,7 +663,6 @@ const Users = () => {
 
     try {
       setSaving(true);
-      setError('');
 
       await apiRequest('/users/me/password', {
         method: 'PATCH',
@@ -399,14 +670,22 @@ const Users = () => {
       });
 
       setSuccess('Password changed successfully');
-      setShowPasswordModal(false);
-      setPasswordForm(EMPTY_PASSWORD_FORM);
+
+      closePasswordModal();
     } catch (err) {
-      setError(err.message || 'Unable to change password');
+      setError(
+        err.message || 'Unable to change password'
+      );
     } finally {
       setSaving(false);
     }
   };
+
+  /*
+   * ---------------------------------------------------------
+   * DELETE / RESTORE
+   * ---------------------------------------------------------
+   */
 
   const deleteUser = async () => {
     if (!confirmDelete) return;
@@ -415,16 +694,22 @@ const Users = () => {
       setSaving(true);
       setError('');
 
-      await apiRequest(`/users/${confirmDelete._id}`, {
-        method: 'DELETE',
-      });
+      await apiRequest(
+        `/users/${confirmDelete._id}`,
+        {
+          method: 'DELETE',
+        }
+      );
 
       setSuccess('User deactivated successfully');
+
       setConfirmDelete(null);
 
       await loadUsers();
     } catch (err) {
-      setError(err.message || 'Unable to deactivate user');
+      setError(
+        err.message || 'Unable to deactivate user'
+      );
     } finally {
       setSaving(false);
     }
@@ -435,23 +720,41 @@ const Users = () => {
       setSaving(true);
       setError('');
 
-      await apiRequest(`/users/${user._id}/restore`, {
-        method: 'PATCH',
-      });
+      await apiRequest(
+        `/users/${user._id}/restore`,
+        {
+          method: 'PATCH',
+        }
+      );
 
       setSuccess('User restored successfully');
+
       await loadUsers();
     } catch (err) {
-      setError(err.message || 'Unable to restore user');
+      setError(
+        err.message || 'Unable to restore user'
+      );
     } finally {
       setSaving(false);
     }
   };
 
+  /*
+   * ---------------------------------------------------------
+   * VIEW
+   * ---------------------------------------------------------
+   */
+
   const viewUser = (user) => {
     setSelectedUser(user);
     setShowDetails(true);
   };
+
+  /*
+   * ---------------------------------------------------------
+   * FILTERS
+   * ---------------------------------------------------------
+   */
 
   const resetFilters = () => {
     setSearch('');
@@ -459,6 +762,12 @@ const Users = () => {
     setRoleFilter('all');
     setPage(1);
   };
+
+  /*
+   * ---------------------------------------------------------
+   * RENDER
+   * ---------------------------------------------------------
+   */
 
   return (
     <div className="min-h-full w-full bg-slate-950 text-slate-100">
@@ -507,6 +816,7 @@ const Users = () => {
         {error && (
           <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             <span>{error}</span>
+
             <button
               type="button"
               onClick={() => setError('')}
@@ -552,6 +862,7 @@ const Users = () => {
         {/* Filters */}
         <div className="mb-5 rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-xl shadow-black/10">
           <div className="flex flex-col gap-3 lg:flex-row">
+
             <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
 
@@ -595,7 +906,7 @@ const Users = () => {
                     key={role._id}
                     value={role._id}
                   >
-                    {role.name || role.title}
+                    {role.name}
                   </option>
                 ))}
               </select>
@@ -634,18 +945,23 @@ const Users = () => {
                   <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
                     User
                   </th>
+
                   <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Role
                   </th>
+
                   <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Department
                   </th>
+
                   <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Designation
                   </th>
+
                   <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Status
                   </th>
+
                   <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Actions
                   </th>
@@ -657,13 +973,19 @@ const Users = () => {
                   <LoadingRows />
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-5 py-16 text-center">
+                    <td
+                      colSpan="6"
+                      className="px-5 py-16 text-center"
+                    >
                       <UsersIcon className="mx-auto mb-3 h-8 w-8 text-slate-700" />
+
                       <p className="text-sm font-medium text-slate-400">
                         No users found
                       </p>
+
                       <p className="mt-1 text-xs text-slate-600">
-                        Try changing your filters or create a new user.
+                        Try changing your filters or create
+                        a new user.
                       </p>
                     </td>
                   </tr>
@@ -687,6 +1009,7 @@ const Users = () => {
                             <p className="truncate text-sm font-semibold text-slate-100">
                               {user.name}
                             </p>
+
                             <p className="truncate text-xs text-slate-500">
                               {user.email}
                             </p>
@@ -701,11 +1024,11 @@ const Users = () => {
                       </td>
 
                       <td className="px-5 py-4 text-sm text-slate-400">
-                        {user.department || '—'}
+                        {getDepartmentName(user.department) || '—'}
                       </td>
 
                       <td className="px-5 py-4 text-sm text-slate-400">
-                        {user.designation || '—'}
+                        {getDesignationName(user.designation) || '—'}
                       </td>
 
                       <td className="px-5 py-4">
@@ -731,7 +1054,9 @@ const Users = () => {
                           {user.status === 'inactive' ? (
                             <ActionButton
                               title="Restore"
-                              onClick={() => restoreUser(user)}
+                              onClick={() =>
+                                restoreUser(user)
+                              }
                             >
                               <RotateCcw className="h-4 w-4" />
                             </ActionButton>
@@ -766,7 +1091,9 @@ const Users = () => {
                 type="button"
                 disabled={page <= 1}
                 onClick={() =>
-                  setPage((current) => Math.max(current - 1, 1))
+                  setPage((current) =>
+                    Math.max(current - 1, 1)
+                  )
                 }
                 className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-800 px-3 text-sm text-slate-400 disabled:cursor-not-allowed disabled:opacity-30 hover:bg-slate-800"
               >
@@ -792,7 +1119,10 @@ const Users = () => {
         </div>
       </div>
 
-      {/* User Create/Edit Modal */}
+      {/* =====================================================
+          CREATE / EDIT USER
+      ===================================================== */}
+
       {showForm && (
         <Modal
           title={editingUser ? 'Edit User' : 'Create User'}
@@ -803,8 +1133,12 @@ const Users = () => {
           }
           onClose={closeForm}
         >
-          <form onSubmit={submitUser} className="space-y-5">
+          <form
+            onSubmit={submitUser}
+            className="space-y-5"
+          >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
               <Input
                 label="Full Name"
                 required
@@ -835,40 +1169,126 @@ const Users = () => {
                 placeholder="+91..."
               />
 
+              {/* Role */}
               <Select
                 label="Role"
                 value={form.role}
+                disabled={optionsLoading}
                 onChange={(value) =>
                   updateForm('role', value)
                 }
               >
-                <option value="">Select role</option>
+                <option value="">
+                  {optionsLoading
+                    ? 'Loading roles...'
+                    : roles.length
+                      ? 'Select role'
+                      : 'No roles available'}
+                </option>
+
+                {form.role &&
+                  !roles.some(
+                    (item) =>
+                      String(item._id) ===
+                      String(form.role)
+                  ) && (
+                    <option value={form.role}>
+                      {getRoleName(editingUser)}
+                    </option>
+                  )}
 
                 {roles.map((role) => (
-                  <option key={role._id} value={role._id}>
-                    {role.name || role.title}
+                  <option
+                    key={role._id}
+                    value={role._id}
+                  >
+                    {role.name}
                   </option>
                 ))}
               </Select>
 
-              <Input
+              {/* Department */}
+              <Select
                 label="Department"
-                value={form.department}
-                onChange={(value) =>
-                  updateForm('department', value)
-                }
-                placeholder="Sales / HR / Finance..."
-              />
+                value={selectedDepartment?._id || ''}
+                disabled={optionsLoading}
+                onChange={updateDepartment}
+              >
+                <option value="">
+                  {optionsLoading
+                    ? 'Loading departments...'
+                    : departments.length
+                      ? 'Select department'
+                      : 'No departments available'}
+                </option>
 
-              <Input
+                {form.department &&
+                  !selectedDepartment && (
+                    <option value={form.department}>
+                      {form.department}
+                    </option>
+                  )}
+
+                {departments.map((department) => (
+                  <option
+                    key={department._id}
+                    value={department._id}
+                  >
+                    {department.name}
+                  </option>
+                ))}
+              </Select>
+
+              {/* Designation */}
+              <Select
                 label="Designation"
-                value={form.designation}
+                value={
+                  designations.some(
+                    (item) =>
+                      item.name === form.designation
+                  )
+                    ? form.designation
+                    : ''
+                }
+                disabled={
+                  !selectedDepartment ||
+                  designationLoading
+                }
                 onChange={(value) =>
                   updateForm('designation', value)
                 }
-                placeholder="Manager / Executive..."
-              />
+              >
+                <option value="">
+                  {designationLoading
+                    ? 'Loading designations...'
+                    : !selectedDepartment
+                      ? 'Select department first'
+                      : designations.length
+                        ? 'Select designation'
+                        : 'No designations available'}
+                </option>
 
+                {form.designation &&
+                  !designations.some(
+                    (item) =>
+                      item.name === form.designation
+                  ) && (
+                    <option value={form.designation}>
+                      {form.designation}
+                    </option>
+                  )}
+
+                {designations.map((designation) => (
+                  <option
+                    key={designation._id}
+                    value={designation.name}
+                  >
+                    {designation.name}
+                  </option>
+                ))}
+              </Select>
+
+              {/* Status */}
               <Select
                 label="Status"
                 value={form.status}
@@ -876,10 +1296,16 @@ const Users = () => {
                   updateForm('status', value)
                 }
               >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
+                <option value="active">
+                  Active
+                </option>
+
+                <option value="inactive">
+                  Inactive
+                </option>
               </Select>
 
+              {/* Create password only */}
               {!editingUser && (
                 <>
                   <PasswordInput
@@ -888,10 +1314,15 @@ const Users = () => {
                     value={form.password}
                     visible={showPassword}
                     onToggle={() =>
-                      setShowPassword((value) => !value)
+                      setShowPassword(
+                        (value) => !value
+                      )
                     }
                     onChange={(value) =>
-                      updateForm('password', value)
+                      updateForm(
+                        'password',
+                        value
+                      )
                     }
                   />
 
@@ -942,17 +1373,15 @@ const Users = () => {
         </Modal>
       )}
 
-      {/* Password Modal */}
+      {/* =====================================================
+          PASSWORD MODAL
+      ===================================================== */}
+
       {showPasswordModal && (
         <Modal
           title="Change Password"
           subtitle="Verify your current password before creating a new password."
-          onClose={() => {
-            if (!saving) {
-              setShowPasswordModal(false);
-              setPasswordForm(EMPTY_PASSWORD_FORM);
-            }
-          }}
+          onClose={closePasswordModal}
         >
           <form
             onSubmit={changePassword}
@@ -962,9 +1391,11 @@ const Users = () => {
               label="Current Password"
               required
               value={passwordForm.currentPassword}
-              visible={showNewPassword}
+              visible={showCurrentPassword}
               onToggle={() =>
-                setShowNewPassword((value) => !value)
+                setShowCurrentPassword(
+                  (value) => !value
+                )
               }
               onChange={(value) =>
                 setPasswordForm((previous) => ({
@@ -978,9 +1409,9 @@ const Users = () => {
               label="New Password"
               required
               value={passwordForm.newPassword}
-              visible={showNewConfirmPassword}
+              visible={showNewPassword}
               onToggle={() =>
-                setShowNewConfirmPassword(
+                setShowNewPassword(
                   (value) => !value
                 )
               }
@@ -1019,9 +1450,7 @@ const Users = () => {
               <button
                 type="button"
                 disabled={saving}
-                onClick={() =>
-                  setShowPasswordModal(false)
-                }
+                onClick={closePasswordModal}
                 className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800"
               >
                 Cancel
@@ -1033,14 +1462,20 @@ const Users = () => {
                 className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-50"
               >
                 <KeyRound className="h-4 w-4" />
-                {saving ? 'Changing...' : 'Change Password'}
+
+                {saving
+                  ? 'Changing...'
+                  : 'Change Password'}
               </button>
             </div>
           </form>
         </Modal>
       )}
 
-      {/* Details Modal */}
+      {/* =====================================================
+          DETAILS MODAL
+      ===================================================== */}
+
       {showDetails && selectedUser && (
         <Modal
           title="User Details"
@@ -1065,23 +1500,35 @@ const Users = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Detail label="Role" value={getRoleName(selectedUser)} />
+              <Detail
+                label="Role"
+                value={getRoleName(selectedUser)}
+              />
+
               <Detail
                 label="Status"
                 value={selectedUser.status}
               />
+
               <Detail
                 label="Department"
-                value={selectedUser.department}
+                value={getDepartmentName(
+                  selectedUser.department
+                )}
               />
+
               <Detail
                 label="Designation"
-                value={selectedUser.designation}
+                value={getDesignationName(
+                  selectedUser.designation
+                )}
               />
+
               <Detail
                 label="Phone"
                 value={selectedUser.phone}
               />
+
               <Detail
                 label="Created"
                 value={
@@ -1097,13 +1544,18 @@ const Users = () => {
         </Modal>
       )}
 
-      {/* Delete Confirmation */}
+      {/* =====================================================
+          DELETE CONFIRMATION
+      ===================================================== */}
+
       {confirmDelete && (
         <Modal
           title="Deactivate User"
           subtitle="This is a soft delete. The user account will remain in the database."
           onClose={() => {
-            if (!saving) setConfirmDelete(null);
+            if (!saving) {
+              setConfirmDelete(null);
+            }
           }}
         >
           <div className="space-y-5">
@@ -1116,7 +1568,9 @@ const Users = () => {
               <button
                 type="button"
                 disabled={saving}
-                onClick={() => setConfirmDelete(null)}
+                onClick={() =>
+                  setConfirmDelete(null)
+                }
                 className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800"
               >
                 Cancel
@@ -1128,7 +1582,9 @@ const Users = () => {
                 onClick={deleteUser}
                 className="rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-400 disabled:opacity-50"
               >
-                {saving ? 'Deactivating...' : 'Deactivate'}
+                {saving
+                  ? 'Deactivating...'
+                  : 'Deactivate'}
               </button>
             </div>
           </div>
@@ -1138,7 +1594,17 @@ const Users = () => {
   );
 };
 
-const StatCard = ({ icon, label, value }) => (
+/*
+ * ============================================================
+ * SMALL UI COMPONENTS
+ * ============================================================
+ */
+
+const StatCard = ({
+  icon,
+  label,
+  value,
+}) => (
   <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
     <div className="mb-4 flex items-center justify-between">
       <span className="text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -1205,6 +1671,7 @@ const Input = ({
   <label className="block">
     <span className="mb-2 block text-xs font-medium text-slate-400">
       {label}
+
       {required && (
         <span className="ml-1 text-red-400">*</span>
       )}
@@ -1214,7 +1681,9 @@ const Input = ({
       type={type}
       required={required}
       value={value}
-      onChange={(event) => onChange(event.target.value)}
+      onChange={(event) =>
+        onChange(event.target.value)
+      }
       placeholder={placeholder}
       className="h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-slate-600"
     />
@@ -1226,6 +1695,7 @@ const Select = ({
   value,
   onChange,
   children,
+  disabled = false,
 }) => (
   <label className="block">
     <span className="mb-2 block text-xs font-medium text-slate-400">
@@ -1234,8 +1704,11 @@ const Select = ({
 
     <select
       value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className="h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none focus:border-slate-600"
+      disabled={disabled}
+      onChange={(event) =>
+        onChange(event.target.value)
+      }
+      className="h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none focus:border-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {children}
     </select>
@@ -1253,6 +1726,7 @@ const PasswordInput = ({
   <label className="block">
     <span className="mb-2 block text-xs font-medium text-slate-400">
       {label}
+
       {required && (
         <span className="ml-1 text-red-400">*</span>
       )}
@@ -1263,7 +1737,9 @@ const PasswordInput = ({
         type={visible ? 'text' : 'password'}
         required={required}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
         className="h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 pr-11 text-sm text-slate-100 outline-none focus:border-slate-600"
       />
 
@@ -1282,7 +1758,10 @@ const PasswordInput = ({
   </label>
 );
 
-const Detail = ({ label, value }) => (
+const Detail = ({
+  label,
+  value,
+}) => (
   <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
     <p className="mb-1 text-[11px] uppercase tracking-wider text-slate-600">
       {label}
@@ -1297,12 +1776,20 @@ const Detail = ({ label, value }) => (
 const LoadingRows = () => (
   <>
     {Array.from({ length: 6 }).map((_, index) => (
-      <tr key={index} className="border-b border-slate-800/70">
-        {Array.from({ length: 6 }).map((__, cell) => (
-          <td key={cell} className="px-5 py-5">
-            <div className="h-4 animate-pulse rounded bg-slate-800" />
-          </td>
-        ))}
+      <tr
+        key={index}
+        className="border-b border-slate-800/70"
+      >
+        {Array.from({ length: 6 }).map(
+          (_, cell) => (
+            <td
+              key={cell}
+              className="px-5 py-5"
+            >
+              <div className="h-4 animate-pulse rounded bg-slate-800" />
+            </td>
+          )
+        )}
       </tr>
     ))}
   </>
@@ -1317,7 +1804,7 @@ const Modal = ({
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
     <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
       <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-800 bg-slate-900 px-5 py-4">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-slate-100">
             {title}
           </h2>
@@ -1332,13 +1819,15 @@ const Modal = ({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg p-2 text-slate-500 hover:bg-slate-800 hover:text-slate-200"
+          className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-800 hover:text-slate-200"
         >
           <X className="h-5 w-5" />
         </button>
       </div>
 
-      <div className="p-5">{children}</div>
+      <div className="p-5">
+        {children}
+      </div>
     </div>
   </div>
 );

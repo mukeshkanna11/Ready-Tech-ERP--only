@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const Role = require('../models/Role');
+const Department = require('../models/Department');
 const httpError = require('../utils/httpError');
 
 const DEFAULT_LIMIT = 100;
@@ -23,7 +23,7 @@ const getId = (req) => {
   const id = req.params.id;
 
   if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-    throw httpError(400, 'Invalid role ID');
+    throw httpError(400, 'Invalid department ID');
   }
 
   return id;
@@ -37,7 +37,7 @@ const clean = (value) => {
   return result || undefined;
 };
 
-// GET /api/roles
+// GET /api/departments
 const list = async (req, res, next) => {
   try {
     const workspaceId = getWorkspaceId(req);
@@ -62,73 +62,70 @@ const list = async (req, res, next) => {
       };
     }
 
-    const roles = await Role.find(filter)
+    const departments = await Department.find(filter)
       .sort({ name: 1 })
       .limit(limit)
       .lean();
 
     return res.status(200).json({
       success: true,
-      data: roles,
+      data: departments,
     });
   } catch (error) {
     return next(error);
   }
 };
 
-// GET /api/roles/:id
+// GET /api/departments/:id
 const getById = async (req, res, next) => {
   try {
     const workspaceId = getWorkspaceId(req);
     const id = getId(req);
 
-    const role = await Role.findOne({
+    const department = await Department.findOne({
       _id: id,
       workspaceId,
     }).lean();
 
-    if (!role) {
-      throw httpError(404, 'Role not found');
+    if (!department) {
+      throw httpError(404, 'Department not found');
     }
 
     return res.status(200).json({
       success: true,
-      data: role,
+      data: department,
     });
   } catch (error) {
     return next(error);
   }
 };
 
-// POST /api/roles
+// POST /api/departments
 const create = async (req, res, next) => {
   try {
     const workspaceId = getWorkspaceId(req);
-
     const name = clean(req.body.name);
-    const description = clean(req.body.description);
 
     if (!name) {
-      throw httpError(400, 'Role name is required');
+      throw httpError(400, 'Department name is required');
     }
 
-    const role = await Role.create({
+    const department = await Department.create({
       workspaceId,
       name,
-      description,
       status: 'active',
     });
 
     return res.status(201).json({
       success: true,
-      message: 'Role created successfully',
-      data: role,
+      message: 'Department created successfully',
+      data: department,
     });
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-        message: 'A role with this name already exists',
+        message: 'A department with this name already exists',
       });
     }
 
@@ -136,7 +133,7 @@ const create = async (req, res, next) => {
   }
 };
 
-// PUT /api/roles/:id
+// PUT /api/departments/:id
 const update = async (req, res, next) => {
   try {
     const workspaceId = getWorkspaceId(req);
@@ -148,21 +145,17 @@ const update = async (req, res, next) => {
       const name = clean(req.body.name);
 
       if (!name) {
-        throw httpError(400, 'Role name is required');
+        throw httpError(400, 'Department name is required');
       }
 
       updateData.name = name;
-    }
-
-    if (req.body.description !== undefined) {
-      updateData.description = clean(req.body.description);
     }
 
     if (req.body.status !== undefined) {
       const status = clean(req.body.status);
 
       if (!['active', 'inactive'].includes(status)) {
-        throw httpError(400, 'Invalid role status');
+        throw httpError(400, 'Invalid department status');
       }
 
       updateData.status = status;
@@ -172,7 +165,7 @@ const update = async (req, res, next) => {
       throw httpError(400, 'No valid fields to update');
     }
 
-    const role = await Role.findOneAndUpdate(
+    const department = await Department.findOneAndUpdate(
       {
         _id: id,
         workspaceId,
@@ -186,20 +179,20 @@ const update = async (req, res, next) => {
       }
     );
 
-    if (!role) {
-      throw httpError(404, 'Role not found');
+    if (!department) {
+      throw httpError(404, 'Department not found');
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Role updated successfully',
-      data: role,
+      message: 'Department updated successfully',
+      data: department,
     });
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-        message: 'A role with this name already exists',
+        message: 'A department with this name already exists',
       });
     }
 
@@ -207,13 +200,13 @@ const update = async (req, res, next) => {
   }
 };
 
-// DELETE /api/roles/:id
+// DELETE /api/departments/:id
 const remove = async (req, res, next) => {
   try {
     const workspaceId = getWorkspaceId(req);
     const id = getId(req);
 
-    const role = await Role.findOneAndUpdate(
+    const department = await Department.findOneAndUpdate(
       {
         _id: id,
         workspaceId,
@@ -228,27 +221,27 @@ const remove = async (req, res, next) => {
       }
     );
 
-    if (!role) {
-      throw httpError(404, 'Role not found');
+    if (!department) {
+      throw httpError(404, 'Department not found');
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Role deactivated successfully',
-      data: role,
+      message: 'Department deactivated successfully',
+      data: department,
     });
   } catch (error) {
     return next(error);
   }
 };
 
-// PATCH /api/roles/:id/restore
+// PATCH /api/departments/:id/restore
 const restore = async (req, res, next) => {
   try {
     const workspaceId = getWorkspaceId(req);
     const id = getId(req);
 
-    const role = await Role.findOneAndUpdate(
+    const department = await Department.findOneAndUpdate(
       {
         _id: id,
         workspaceId,
@@ -263,14 +256,14 @@ const restore = async (req, res, next) => {
       }
     );
 
-    if (!role) {
-      throw httpError(404, 'Role not found');
+    if (!department) {
+      throw httpError(404, 'Department not found');
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Role restored successfully',
-      data: role,
+      message: 'Department restored successfully',
+      data: department,
     });
   } catch (error) {
     return next(error);

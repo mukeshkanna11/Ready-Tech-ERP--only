@@ -1,5 +1,5 @@
 const express = require("express");
-const roleController = require("../controllers/role.controller");
+const designationController = require("../controllers/designation.controller");
 const authenticate = require("../middleware/auth.middleware");
 const tenantScope = require("../middleware/tenant.middleware");
 
@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.use(authenticate, tenantScope);
 
-router.get("/", roleController.list);
-router.get("/:id", roleController.getById);
+router.get("/", designationController.list);
+router.get("/:id", designationController.getById);
 
 module.exports = router;

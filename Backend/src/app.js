@@ -8,6 +8,11 @@ const authRoutes = require("./routes/auth.routes");
 const companyRoutes = require("./routes/company.routes");
 const branchRoutes = require("./routes/branch.routes");
 const userRoutes = require("./routes/user.routes");
+const roleRoutes = require("./routes/role.routes");
+const departmentRoutes = require("./routes/department.routes");
+const designationRoutes = require("./routes/designation.routes");
+
+
 const { notFound, errorHandler } = require("./middleware/error.middleware");
 
 const app = express();
@@ -32,7 +37,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/companies", companyRoutes);
 app.use("/api/branches", branchRoutes);
 app.use("/api/users", userRoutes);
-
+app.use("/api/roles", roleRoutes);
+app.use("/api/departments", departmentRoutes);
+app.use("/api/designations", designationRoutes);
 
 
 

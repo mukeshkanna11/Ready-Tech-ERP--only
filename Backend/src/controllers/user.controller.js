@@ -268,9 +268,13 @@ const update = async (req, res, next) => {
        * If your Role model has workspace/company
        * ownership, this query can be tightened later.
        */
-      const role = await Role.findById(roleId)
-        .select('_id')
-        .lean();
+      const role = await Role.findOne({
+  _id: roleId,
+  workspaceId,
+  status: 'active',
+})
+  .select('_id')
+  .lean();
 
       if (!role) {
         throw httpError(

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
-const Role = require('../models/Role');
+const Designation = require('../models/Designation');
+const Department = require('../models/Department');
 const httpError = require('../utils/httpError');
 
 const DEFAULT_LIMIT = 100;
@@ -23,7 +24,7 @@ const getId = (req) => {
   const id = req.params.id;
 
   if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-    throw httpError(400, 'Invalid role ID');
+    throw httpError(400, 'Invalid designation ID');
   }
 
   return id;
@@ -37,13 +38,35 @@ const clean = (value) => {
   return result || undefined;
 };
 
-// GET /api/roles
+const validateDepartment = async (departmentId, workspaceId) => {
+  if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+    throw httpError(400, 'Invalid department ID');
+  }
+
+  const department = await Department.findOne({
+    _id: departmentId,
+    workspaceId,
+    status: 'active',
+  })
+    .select('_id name')
+    .lean();
+
+  if (!department) {
+    throw httpError(404, 'Department not found');
+  }
+
+  return department;
+};
+
+// GET /api/designations
+// Optional: ?departmentId=xxx
 const list = async (req, res, next) => {
   try {
     const workspaceId = getWorkspaceId(req);
 
     const status = clean(req.query.status) || 'active';
     const search = clean(req.query.search);
+    const departmentId = clean(req.query.departmentId);
 
     const limit = Math.min(
       Math.max(Number.parseInt(req.query.limit, 10) || DEFAULT_LIMIT, 1),
@@ -55,6 +78,14 @@ const list = async (req, res, next) => {
       status,
     };
 
+    if (departmentId) {
+      if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+        throw httpError(400, 'Invalid department ID');
+      }
+
+      filter.departmentId = departmentId;
+    }
+
     if (search) {
       filter.name = {
         $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
@@ -62,73 +93,97 @@ const list = async (req, res, next) => {
       };
     }
 
-    const roles = await Role.find(filter)
+    const designations = await Designation.find(filter)
+      .populate({
+        path: 'departmentId',
+        select: 'name status',
+      })
       .sort({ name: 1 })
       .limit(limit)
       .lean();
 
     return res.status(200).json({
       success: true,
-      data: roles,
+      data: designations,
     });
   } catch (error) {
     return next(error);
   }
 };
 
-// GET /api/roles/:id
+// GET /api/designations/:id
 const getById = async (req, res, next) => {
   try {
     const workspaceId = getWorkspaceId(req);
     const id = getId(req);
 
-    const role = await Role.findOne({
+    const designation = await Designation.findOne({
       _id: id,
       workspaceId,
-    }).lean();
+    })
+      .populate({
+        path: 'departmentId',
+        select: 'name status',
+      })
+      .lean();
 
-    if (!role) {
-      throw httpError(404, 'Role not found');
+    if (!designation) {
+      throw httpError(404, 'Designation not found');
     }
 
     return res.status(200).json({
       success: true,
-      data: role,
+      data: designation,
     });
   } catch (error) {
     return next(error);
   }
 };
 
-// POST /api/roles
+// POST /api/designations
 const create = async (req, res, next) => {
   try {
     const workspaceId = getWorkspaceId(req);
 
     const name = clean(req.body.name);
-    const description = clean(req.body.description);
+    const departmentId = clean(req.body.departmentId);
 
     if (!name) {
-      throw httpError(400, 'Role name is required');
+      throw httpError(400, 'Designation name is required');
     }
 
-    const role = await Role.create({
+    if (!departmentId) {
+      throw httpError(400, 'Department is required');
+    }
+
+    await validateDepartment(departmentId, workspaceId);
+
+    const designation = await Designation.create({
       workspaceId,
+      departmentId,
       name,
-      description,
       status: 'active',
     });
 
+    const populatedDesignation = await Designation.findById(
+      designation._id
+    )
+      .populate({
+        path: 'departmentId',
+        select: 'name status',
+      })
+      .lean();
+
     return res.status(201).json({
       success: true,
-      message: 'Role created successfully',
-      data: role,
+      message: 'Designation created successfully',
+      data: populatedDesignation,
     });
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-        message: 'A role with this name already exists',
+        message: 'A designation with this name already exists',
       });
     }
 
@@ -136,7 +191,7 @@ const create = async (req, res, next) => {
   }
 };
 
-// PUT /api/roles/:id
+// PUT /api/designations/:id
 const update = async (req, res, next) => {
   try {
     const workspaceId = getWorkspaceId(req);
@@ -148,21 +203,29 @@ const update = async (req, res, next) => {
       const name = clean(req.body.name);
 
       if (!name) {
-        throw httpError(400, 'Role name is required');
+        throw httpError(400, 'Designation name is required');
       }
 
       updateData.name = name;
     }
 
-    if (req.body.description !== undefined) {
-      updateData.description = clean(req.body.description);
+    if (req.body.departmentId !== undefined) {
+      const departmentId = clean(req.body.departmentId);
+
+      if (!departmentId) {
+        throw httpError(400, 'Department is required');
+      }
+
+      await validateDepartment(departmentId, workspaceId);
+
+      updateData.departmentId = departmentId;
     }
 
     if (req.body.status !== undefined) {
       const status = clean(req.body.status);
 
       if (!['active', 'inactive'].includes(status)) {
-        throw httpError(400, 'Invalid role status');
+        throw httpError(400, 'Invalid designation status');
       }
 
       updateData.status = status;
@@ -172,7 +235,7 @@ const update = async (req, res, next) => {
       throw httpError(400, 'No valid fields to update');
     }
 
-    const role = await Role.findOneAndUpdate(
+    const designation = await Designation.findOneAndUpdate(
       {
         _id: id,
         workspaceId,
@@ -184,22 +247,26 @@ const update = async (req, res, next) => {
         new: true,
         runValidators: true,
       }
-    );
+    )
+      .populate({
+        path: 'departmentId',
+        select: 'name status',
+      });
 
-    if (!role) {
-      throw httpError(404, 'Role not found');
+    if (!designation) {
+      throw httpError(404, 'Designation not found');
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Role updated successfully',
-      data: role,
+      message: 'Designation updated successfully',
+      data: designation,
     });
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-        message: 'A role with this name already exists',
+        message: 'A designation with this name already exists',
       });
     }
 
@@ -207,13 +274,13 @@ const update = async (req, res, next) => {
   }
 };
 
-// DELETE /api/roles/:id
+// DELETE /api/designations/:id
 const remove = async (req, res, next) => {
   try {
     const workspaceId = getWorkspaceId(req);
     const id = getId(req);
 
-    const role = await Role.findOneAndUpdate(
+    const designation = await Designation.findOneAndUpdate(
       {
         _id: id,
         workspaceId,
@@ -228,27 +295,27 @@ const remove = async (req, res, next) => {
       }
     );
 
-    if (!role) {
-      throw httpError(404, 'Role not found');
+    if (!designation) {
+      throw httpError(404, 'Designation not found');
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Role deactivated successfully',
-      data: role,
+      message: 'Designation deactivated successfully',
+      data: designation,
     });
   } catch (error) {
     return next(error);
   }
 };
 
-// PATCH /api/roles/:id/restore
+// PATCH /api/designations/:id/restore
 const restore = async (req, res, next) => {
   try {
     const workspaceId = getWorkspaceId(req);
     const id = getId(req);
 
-    const role = await Role.findOneAndUpdate(
+    const designation = await Designation.findOneAndUpdate(
       {
         _id: id,
         workspaceId,
@@ -263,14 +330,14 @@ const restore = async (req, res, next) => {
       }
     );
 
-    if (!role) {
-      throw httpError(404, 'Role not found');
+    if (!designation) {
+      throw httpError(404, 'Designation not found');
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Role restored successfully',
-      data: role,
+      message: 'Designation restored successfully',
+      data: designation,
     });
   } catch (error) {
     return next(error);
