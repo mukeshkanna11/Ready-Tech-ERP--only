@@ -6,6 +6,8 @@ import {
   LogOut,
   Menu,
   Network,
+  Users,
+  UsersRound,
   X,
 } from "lucide-react";
 
@@ -15,7 +17,8 @@ const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/company", label: "Companies", icon: Building2, end: true },
   { to: "/company/branches", label: "Branches", icon: Network },
-  { to: "/users", label: "Users", icon: Network }
+  { to: "/users", label: "Users", icon: Users },
+  { to: "/hr", label: "HR", icon: UsersRound },
 ];
 
 const readUser = () => {

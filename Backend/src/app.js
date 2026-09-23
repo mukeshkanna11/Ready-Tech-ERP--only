@@ -11,7 +11,7 @@ const userRoutes = require("./routes/user.routes");
 const roleRoutes = require("./routes/role.routes");
 const departmentRoutes = require("./routes/department.routes");
 const designationRoutes = require("./routes/designation.routes");
-
+const employeeRoutes = require("./routes/employee.routes");
 
 const { notFound, errorHandler } = require("./middleware/error.middleware");
 
@@ -40,7 +40,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/roles", roleRoutes);
 app.use("/api/departments", departmentRoutes);
 app.use("/api/designations", designationRoutes);
-
+app.use("/api/employees", employeeRoutes);
 
 
 app.use(notFound);
