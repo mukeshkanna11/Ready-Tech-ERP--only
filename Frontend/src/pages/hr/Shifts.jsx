@@ -19,7 +19,7 @@ import {
   Loader2,
   SlidersHorizontal,
 } from "lucide-react";
-import api from "../../services/api";
+import api, { getToken } from "../../services/api";
 const API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -57,11 +57,6 @@ const SHIFT_TYPES = [
     icon: RefreshCw,
   },
 ];
-
-const getToken = () =>
-  localStorage.getItem("token") ||
-  localStorage.getItem("accessToken") ||
-  localStorage.getItem("authToken");
 
 const getErrorMessage = (error, fallback = "Something went wrong") => {
   if (error?.response?.data?.message) {

@@ -23,16 +23,10 @@ import {
   ReceiptText,
   ShieldCheck,
 } from "lucide-react";
-import api from "../../services/api";
+import api, { getToken } from "../../services/api";
 const API_BASE = (
   import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 ).replace(/\/$/, "");
-
-const getToken = () =>
-  localStorage.getItem("token") ||
-  localStorage.getItem("accessToken") ||
-  localStorage.getItem("authToken") ||
-  "";
 
 const getEmployeeName = (employee) => {
   if (!employee) return "Unknown Employee";

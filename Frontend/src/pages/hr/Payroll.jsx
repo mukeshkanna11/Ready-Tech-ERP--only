@@ -25,6 +25,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import { getToken } from "../../services/api";
 
 const API_BASE = (
   import.meta.env.VITE_API_URL || "http://localhost:5000/api"
@@ -81,15 +82,6 @@ const EMPTY_FORM = {
   otherDeductions: "",
   notes: "",
 };
-
-function getToken() {
-  return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("accessToken") ||
-    localStorage.getItem("authToken") ||
-    ""
-  );
-}
 
 async function apiRequest(endpoint, options = {}) {
   const token = getToken();

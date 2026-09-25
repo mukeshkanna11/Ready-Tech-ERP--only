@@ -28,17 +28,12 @@ import {
   BriefcaseBusiness,
   IndianRupee,
 } from "lucide-react";
+import { getToken } from "../../services/api";
 
 const API_BASE =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const PAGE_SIZE = 10;
-
-const getToken = () =>
-  localStorage.getItem("token") ||
-  localStorage.getItem("accessToken") ||
-  localStorage.getItem("authToken") ||
-  "";
 
 const apiRequest = async (endpoint) => {
   const token = getToken();

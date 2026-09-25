@@ -28,7 +28,7 @@ import {
   ShieldCheck,
   Power,
 } from "lucide-react";
-import api from "../../services/api";
+import api, { getToken } from "../../services/api";
 const API_BASE =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -78,12 +78,6 @@ const EMPTY_FORM = {
   isActive: true,
   notes: "",
 };
-
-const getToken = () =>
-  localStorage.getItem("token") ||
-  localStorage.getItem("accessToken") ||
-  localStorage.getItem("authToken") ||
-  "";
 
 const normalizeResponse = (payload) => {
   if (Array.isArray(payload)) return payload;
