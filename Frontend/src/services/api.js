@@ -12,6 +12,7 @@ export const getToken = () =>
   localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
 
 export const setSession = ({ token, user }, remember = false) => {
+  clearSession();
   const store = remember ? localStorage : sessionStorage;
   store.setItem(TOKEN_KEY, token);
   if (user) store.setItem(USER_KEY, JSON.stringify(user));

@@ -1,8 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-
-const API_URL =
-  import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
-  "https://ready-tech-erp.onrender.com/api";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import api from "../../services/api";
 
 const initialForm = {
   userId: "",
@@ -48,22 +45,38 @@ const maritalOptions = [
   { value: "other", label: "Other" },
 ];
 
-function getToken() {
-  return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("accessToken") ||
-    sessionStorage.getItem("token") ||
-    sessionStorage.getItem("accessToken") ||
-    ""
-  );
+function getId(item) {
+  return item?._id || item?.id || "";
 }
 
 function getUserId(user) {
-  return user?._id || user?.id || "";
+  return getId(user);
 }
 
 function getBranchId(branch) {
-  return branch?._id || branch?.id || "";
+  return getId(branch);
+}
+
+function normalizeListResponse(data, key) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.data?.[key])) return data.data[key];
+  if (Array.isArray(data?.[key])) return data[key];
+  if (Array.isArray(data?.results)) return data.results;
+  return [];
+}
+
+function getResponseData(response) {
+  return response?.data ?? {};
+}
+
+function getMessage(error, fallback) {
+  return (
+    error?.response?.data?.message ||
+    error?.response?.data?.error ||
+    error?.message ||
+    fallback
+  );
 }
 
 function formatDate(value) {
@@ -139,18 +152,14 @@ function getBranchName(employee) {
   );
 }
 
-function normalizeListResponse(data, key) {
-  if (Array.isArray(data)) return data;
+function toDateInput(value) {
+  if (!value) return "";
 
-  if (Array.isArray(data?.data)) return data.data;
+  const date = new Date(value);
 
-  if (Array.isArray(data?.data?.[key])) return data.data[key];
+  if (Number.isNaN(date.getTime())) return "";
 
-  if (Array.isArray(data?.[key])) return data[key];
-
-  if (Array.isArray(data?.results)) return data.results;
-
-  return [];
+  return date.toISOString().split("T")[0];
 }
 
 export default function Employee() {
@@ -161,6 +170,7 @@ export default function Employee() {
   const [loading, setLoading] = useState(true);
   const [loadingMasters, setLoadingMasters] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -180,10 +190,9 @@ export default function Employee() {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [viewingEmployee, setViewingEmployee] = useState(null);
 
-  const [form, setForm] = useState(initialForm);
-
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [actionLoading, setActionLoading] = useState(false);
+
+  const [form, setForm] = useState(initialForm);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -197,60 +206,83 @@ export default function Employee() {
     [employees]
   );
 
-  const fetchJSON = async (url, options = {}) => {
-    const token = getToken();
+  /*
+   * ---------------------------------------------------------
+   * Load Users + Branches
+   * ---------------------------------------------------------
+   */
+  const fetchMasters = useCallback(async () => {
+    try {
+      setLoadingMasters(true);
 
-    const response = await fetch(`${API_URL}${url}`, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options.headers || {}),
-      },
-    });
+      const [usersResponse, branchesResponse] = await Promise.all([
+        api.get("/users", {
+          params: {
+            status: "active",
+            limit: 100,
+          },
+        }),
 
-    const data = await response.json().catch(() => ({}));
+        api.get("/branches", {
+          params: {
+            status: "active",
+            limit: 100,
+          },
+        }),
+      ]);
 
-    if (!response.ok) {
-      throw new Error(
-        data?.message ||
-          data?.error ||
-          `Request failed with status ${response.status}`
+      const usersData = getResponseData(usersResponse);
+      const branchesData = getResponseData(branchesResponse);
+
+      setUsers(normalizeListResponse(usersData, "users"));
+      setBranches(normalizeListResponse(branchesData, "branches"));
+    } catch (error) {
+      setError(
+        getMessage(
+          error,
+          "Unable to load users and branches."
+        )
       );
+    } finally {
+      setLoadingMasters(false);
     }
+  }, []);
 
-    return data;
-  };
-
-  const fetchEmployees = async () => {
+  /*
+   * ---------------------------------------------------------
+   * Load Employees
+   * ---------------------------------------------------------
+   */
+  const fetchEmployees = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
 
-      const params = new URLSearchParams();
+      const response = await api.get("/employees", {
+        params: {
+          page,
+          limit,
+          ...(search.trim()
+            ? { search: search.trim() }
+            : {}),
+          ...(statusFilter
+            ? { status: statusFilter }
+            : {}),
+          ...(branchFilter
+            ? { branchId: branchFilter }
+            : {}),
+          ...(employmentFilter
+            ? { employmentType: employmentFilter }
+            : {}),
+        },
+      });
 
-      params.set("page", page);
-      params.set("limit", limit);
+      const data = getResponseData(response);
 
-      if (search.trim()) {
-        params.set("search", search.trim());
-      }
-
-      if (statusFilter) {
-        params.set("status", statusFilter);
-      }
-
-      if (branchFilter) {
-        params.set("branchId", branchFilter);
-      }
-
-      if (employmentFilter) {
-        params.set("employmentType", employmentFilter);
-      }
-
-      const data = await fetchJSON(`/employees?${params.toString()}`);
-
-      const list = normalizeListResponse(data, "employees");
+      const list = normalizeListResponse(
+        data,
+        "employees"
+      );
 
       setEmployees(list);
 
@@ -262,64 +294,76 @@ export default function Employee() {
         list.length;
 
       setTotal(Number(responseTotal) || 0);
-    } catch (err) {
-      setError(err.message || "Unable to load employees.");
+    } catch (error) {
+      setError(
+        getMessage(
+          error,
+          "Unable to load employees."
+        )
+      );
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchMasters = async () => {
-    try {
-      setLoadingMasters(true);
-
-      const [usersResponse, branchesResponse] = await Promise.all([
-        fetchJSON("/users?status=active&limit=100"),
-        fetchJSON("/branches?status=active&limit=100"),
-      ]);
-
-      setUsers(normalizeListResponse(usersResponse, "users"));
-      setBranches(normalizeListResponse(branchesResponse, "branches"));
-    } catch (err) {
-      setError(err.message || "Unable to load users or branches.");
-    } finally {
-      setLoadingMasters(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchMasters();
-  }, []);
-
-  useEffect(() => {
-    fetchEmployees();
   }, [
     page,
+    limit,
+    search,
     statusFilter,
     branchFilter,
     employmentFilter,
   ]);
 
+  /*
+   * ---------------------------------------------------------
+   * Initial Master Data
+   * ---------------------------------------------------------
+   */
+  useEffect(() => {
+    fetchMasters();
+  }, [fetchMasters]);
+
+  /*
+   * ---------------------------------------------------------
+   * Employee List
+   * ---------------------------------------------------------
+   */
+  useEffect(() => {
+    fetchEmployees();
+  }, [fetchEmployees]);
+
+  /*
+   * ---------------------------------------------------------
+   * Search Debounce
+   * ---------------------------------------------------------
+   */
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (page === 1) {
-        fetchEmployees();
-      } else {
-        setPage(1);
-      }
+      setPage((currentPage) =>
+        currentPage === 1 ? currentPage : 1
+      );
     }, 450);
 
     return () => clearTimeout(timer);
   }, [search]);
 
+  /*
+   * ---------------------------------------------------------
+   * Create Modal
+   * ---------------------------------------------------------
+   */
   const openCreateModal = () => {
     setEditingEmployee(null);
-    setForm(initialForm);
+    setForm({ ...initialForm });
     setError("");
     setSuccess("");
     setShowModal(true);
   };
 
+  /*
+   * ---------------------------------------------------------
+   * Edit Modal
+   * ---------------------------------------------------------
+   */
   const openEditModal = (employee) => {
     setEditingEmployee(employee);
 
@@ -329,30 +373,48 @@ export default function Employee() {
         employee?.userId?.id ||
         employee?.userId ||
         "",
+
       employeeCode: employee?.employeeCode || "",
+
       branchId:
         employee?.branchId?._id ||
         employee?.branchId?.id ||
         employee?.branchId ||
         "",
-      joiningDate: employee?.joiningDate
-        ? new Date(employee.joiningDate).toISOString().split("T")[0]
-        : "",
-      employmentType: employee?.employmentType || "full_time",
+
+      joiningDate: toDateInput(
+        employee?.joiningDate
+      ),
+
+      employmentType:
+        employee?.employmentType || "full_time",
+
       gender: employee?.gender || "",
-      dateOfBirth: employee?.dateOfBirth
-        ? new Date(employee.dateOfBirth).toISOString().split("T")[0]
-        : "",
-      maritalStatus: employee?.maritalStatus || "",
+
+      dateOfBirth: toDateInput(
+        employee?.dateOfBirth
+      ),
+
+      maritalStatus:
+        employee?.maritalStatus || "",
+
       address: employee?.address || "",
       city: employee?.city || "",
       state: employee?.state || "",
       country: employee?.country || "India",
       postalCode: employee?.postalCode || "",
-      emergencyContactName: employee?.emergencyContactName || "",
-      emergencyContactPhone: employee?.emergencyContactPhone || "",
-      emergencyContactRelation: employee?.emergencyContactRelation || "",
+
+      emergencyContactName:
+        employee?.emergencyContactName || "",
+
+      emergencyContactPhone:
+        employee?.emergencyContactPhone || "",
+
+      emergencyContactRelation:
+        employee?.emergencyContactRelation || "",
+
       status: employee?.status || "active",
+
       notes: employee?.notes || "",
     });
 
@@ -361,11 +423,16 @@ export default function Employee() {
     setShowModal(true);
   };
 
+  /*
+   * ---------------------------------------------------------
+   * View Employee
+   * ---------------------------------------------------------
+   */
   const openViewModal = async (employee) => {
     try {
       setError("");
 
-      const employeeId = employee?._id || employee?.id;
+      const employeeId = getId(employee);
 
       if (!employeeId) {
         setViewingEmployee(employee);
@@ -373,7 +440,11 @@ export default function Employee() {
         return;
       }
 
-      const data = await fetchJSON(`/employees/${employeeId}`);
+      const response = await api.get(
+        `/employees/${employeeId}`
+      );
+
+      const data = getResponseData(response);
 
       const detailed =
         data?.employee ||
@@ -383,11 +454,21 @@ export default function Employee() {
 
       setViewingEmployee(detailed);
       setShowViewModal(true);
-    } catch (err) {
-      setError(err.message || "Unable to load employee details.");
+    } catch (error) {
+      setError(
+        getMessage(
+          error,
+          "Unable to load employee details."
+        )
+      );
     }
   };
 
+  /*
+   * ---------------------------------------------------------
+   * Form Change
+   * ---------------------------------------------------------
+   */
   const handleChange = (event) => {
     const { name, value } = event.target;
 
@@ -397,6 +478,11 @@ export default function Employee() {
     }));
   };
 
+  /*
+   * ---------------------------------------------------------
+   * Validation
+   * ---------------------------------------------------------
+   */
   const validateForm = () => {
     if (!editingEmployee && !form.userId) {
       return "Please select a user.";
@@ -413,6 +499,11 @@ export default function Employee() {
     return "";
   };
 
+  /*
+   * ---------------------------------------------------------
+   * Save Employee
+   * ---------------------------------------------------------
+   */
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -431,24 +522,53 @@ export default function Employee() {
       const payload = {
         employeeCode: form.employeeCode.trim(),
         branchId: form.branchId,
-        joiningDate: form.joiningDate || undefined,
-        employmentType: form.employmentType,
-        gender: form.gender || undefined,
-        dateOfBirth: form.dateOfBirth || undefined,
-        maritalStatus: form.maritalStatus || undefined,
-        address: form.address.trim() || undefined,
-        city: form.city.trim() || undefined,
-        state: form.state.trim() || undefined,
-        country: form.country.trim() || "India",
-        postalCode: form.postalCode.trim() || undefined,
+
+        joiningDate:
+          form.joiningDate || undefined,
+
+        employmentType:
+          form.employmentType,
+
+        gender:
+          form.gender || undefined,
+
+        dateOfBirth:
+          form.dateOfBirth || undefined,
+
+        maritalStatus:
+          form.maritalStatus || undefined,
+
+        address:
+          form.address.trim() || undefined,
+
+        city:
+          form.city.trim() || undefined,
+
+        state:
+          form.state.trim() || undefined,
+
+        country:
+          form.country.trim() || "India",
+
+        postalCode:
+          form.postalCode.trim() || undefined,
+
         emergencyContactName:
-          form.emergencyContactName.trim() || undefined,
+          form.emergencyContactName.trim() ||
+          undefined,
+
         emergencyContactPhone:
-          form.emergencyContactPhone.trim() || undefined,
+          form.emergencyContactPhone.trim() ||
+          undefined,
+
         emergencyContactRelation:
-          form.emergencyContactRelation.trim() || undefined,
+          form.emergencyContactRelation.trim() ||
+          undefined,
+
         status: form.status,
-        notes: form.notes.trim() || undefined,
+
+        notes:
+          form.notes.trim() || undefined,
       };
 
       if (!editingEmployee) {
@@ -456,36 +576,52 @@ export default function Employee() {
       }
 
       if (editingEmployee) {
-        const employeeId =
-          editingEmployee?._id || editingEmployee?.id;
+        const employeeId = getId(
+          editingEmployee
+        );
 
-        await fetchJSON(`/employees/${employeeId}`, {
-          method: "PUT",
-          body: JSON.stringify(payload),
-        });
+        await api.put(
+          `/employees/${employeeId}`,
+          payload
+        );
 
-        setSuccess("Employee updated successfully.");
+        setSuccess(
+          "Employee updated successfully."
+        );
       } else {
-        await fetchJSON("/employees", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
+        await api.post(
+          "/employees",
+          payload
+        );
 
-        setSuccess("Employee created successfully.");
+        setSuccess(
+          "Employee created successfully."
+        );
       }
 
       setShowModal(false);
-      setForm(initialForm);
+      setForm({ ...initialForm });
       setEditingEmployee(null);
 
       await fetchEmployees();
-    } catch (err) {
-      setError(err.message || "Unable to save employee.");
+      await fetchMasters();
+    } catch (error) {
+      setError(
+        getMessage(
+          error,
+          "Unable to save employee."
+        )
+      );
     } finally {
       setSaving(false);
     }
   };
 
+  /*
+   * ---------------------------------------------------------
+   * Deactivate Employee
+   * ---------------------------------------------------------
+   */
   const handleDelete = async () => {
     if (!deleteTarget) return;
 
@@ -494,47 +630,70 @@ export default function Employee() {
       setError("");
       setSuccess("");
 
-      const employeeId =
-        deleteTarget?._id || deleteTarget?.id;
+      const employeeId = getId(deleteTarget);
 
-      await fetchJSON(`/employees/${employeeId}`, {
-        method: "DELETE",
-      });
+      await api.delete(
+        `/employees/${employeeId}`
+      );
 
-      setSuccess("Employee deactivated successfully.");
+      setSuccess(
+        "Employee deactivated successfully."
+      );
+
       setDeleteTarget(null);
 
       await fetchEmployees();
-    } catch (err) {
-      setError(err.message || "Unable to deactivate employee.");
+    } catch (error) {
+      setError(
+        getMessage(
+          error,
+          "Unable to deactivate employee."
+        )
+      );
     } finally {
       setActionLoading(false);
     }
   };
 
+  /*
+   * ---------------------------------------------------------
+   * Restore Employee
+   * ---------------------------------------------------------
+   */
   const handleRestore = async (employee) => {
     try {
       setActionLoading(true);
       setError("");
       setSuccess("");
 
-      const employeeId =
-        employee?._id || employee?.id;
+      const employeeId = getId(employee);
 
-      await fetchJSON(`/employees/${employeeId}/restore`, {
-        method: "PATCH",
-      });
+      await api.patch(
+        `/employees/${employeeId}/restore`
+      );
 
-      setSuccess("Employee restored successfully.");
+      setSuccess(
+        "Employee restored successfully."
+      );
 
       await fetchEmployees();
-    } catch (err) {
-      setError(err.message || "Unable to restore employee.");
+    } catch (error) {
+      setError(
+        getMessage(
+          error,
+          "Unable to restore employee."
+        )
+      );
     } finally {
       setActionLoading(false);
     }
   };
 
+  /*
+   * ---------------------------------------------------------
+   * Filters
+   * ---------------------------------------------------------
+   */
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("active");
@@ -545,7 +704,9 @@ export default function Employee() {
 
   const getEmploymentLabel = (value) => {
     return (
-      employmentTypes.find((item) => item.value === value)?.label ||
+      employmentTypes.find(
+        (item) => item.value === value
+      )?.label ||
       value ||
       "-"
     );
@@ -554,11 +715,13 @@ export default function Employee() {
   return (
     <div className="min-h-screen w-full bg-slate-950 text-white">
       <div className="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-5 lg:px-7">
+
         {/* Header */}
         <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="mb-1 flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)]" />
+
               <span className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400">
                 HR Management
               </span>
@@ -578,7 +741,9 @@ export default function Employee() {
             onClick={openCreateModal}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 sm:w-auto"
           >
-            <span className="text-lg leading-none">+</span>
+            <span className="text-lg leading-none">
+              +
+            </span>
             Add Employee
           </button>
         </div>
@@ -660,6 +825,7 @@ export default function Employee() {
         {/* Filters */}
         <div className="mb-5 rounded-2xl border border-white/10 bg-white/[0.035] p-3 sm:p-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+
             {/* Search */}
             <div className="xl:col-span-2">
               <label className="mb-1.5 block text-xs font-medium text-slate-400">
@@ -698,13 +864,20 @@ export default function Employee() {
               <select
                 value={statusFilter}
                 onChange={(event) => {
-                  setStatusFilter(event.target.value);
+                  setStatusFilter(
+                    event.target.value
+                  );
                   setPage(1);
                 }}
                 className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/50"
               >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
+                <option value="active">
+                  Active
+                </option>
+
+                <option value="inactive">
+                  Inactive
+                </option>
               </select>
             </div>
 
@@ -717,18 +890,29 @@ export default function Employee() {
               <select
                 value={branchFilter}
                 onChange={(event) => {
-                  setBranchFilter(event.target.value);
+                  setBranchFilter(
+                    event.target.value
+                  );
                   setPage(1);
                 }}
-                className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/50"
+                disabled={loadingMasters}
+                className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/50 disabled:opacity-50"
               >
-                <option value="">All Branches</option>
+                <option value="">
+                  {loadingMasters
+                    ? "Loading branches..."
+                    : "All Branches"}
+                </option>
 
                 {branches.map((branch) => {
-                  const id = getBranchId(branch);
+                  const id =
+                    getBranchId(branch);
 
                   return (
-                    <option key={id} value={id}>
+                    <option
+                      key={id}
+                      value={id}
+                    >
                       {branch.name}
                     </option>
                   );
@@ -745,25 +929,35 @@ export default function Employee() {
               <select
                 value={employmentFilter}
                 onChange={(event) => {
-                  setEmploymentFilter(event.target.value);
+                  setEmploymentFilter(
+                    event.target.value
+                  );
                   setPage(1);
                 }}
                 className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none focus:border-emerald-500/50"
               >
-                <option value="">All Types</option>
+                <option value="">
+                  All Types
+                </option>
 
-                {employmentTypes.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
+                {employmentTypes.map(
+                  (type) => (
+                    <option
+                      key={type.value}
+                      value={type.value}
+                    >
+                      {type.label}
+                    </option>
+                  )
+                )}
               </select>
             </div>
           </div>
 
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-slate-500">
-              {total} employee{total === 1 ? "" : "s"} found
+              {total} employee
+              {total === 1 ? "" : "s"} found
             </p>
 
             <button
@@ -852,9 +1046,10 @@ export default function Employee() {
                 ) : (
                   employees.map((employee) => {
                     const employeeId =
-                      employee?._id || employee?.id;
+                      getId(employee);
 
-                    const name = getUserName(employee);
+                    const name =
+                      getUserName(employee);
 
                     return (
                       <tr
@@ -875,7 +1070,9 @@ export default function Employee() {
                               </p>
 
                               <p className="mt-0.5 truncate text-xs text-slate-500">
-                                {getUserEmail(employee)}
+                                {getUserEmail(
+                                  employee
+                                )}
                               </p>
                             </div>
                           </div>
@@ -883,7 +1080,8 @@ export default function Employee() {
 
                         <td className="px-5 py-4">
                           <span className="rounded-lg bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">
-                            {employee.employeeCode || "-"}
+                            {employee.employeeCode ||
+                              "-"}
                           </span>
                         </td>
 
@@ -908,7 +1106,8 @@ export default function Employee() {
                         </td>
 
                         <td className="px-5 py-4">
-                          {employee.status === "active" ? (
+                          {employee.status ===
+                          "active" ? (
                             <span className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
                               Active
                             </span>
@@ -924,7 +1123,9 @@ export default function Employee() {
                             <button
                               type="button"
                               onClick={() =>
-                                openViewModal(employee)
+                                openViewModal(
+                                  employee
+                                )
                               }
                               className="rounded-lg px-2.5 py-2 text-xs font-medium text-slate-400 transition hover:bg-white/10 hover:text-white"
                             >
@@ -934,18 +1135,23 @@ export default function Employee() {
                             <button
                               type="button"
                               onClick={() =>
-                                openEditModal(employee)
+                                openEditModal(
+                                  employee
+                                )
                               }
                               className="rounded-lg px-2.5 py-2 text-xs font-medium text-blue-400 transition hover:bg-blue-500/10 hover:text-blue-300"
                             >
                               Edit
                             </button>
 
-                            {employee.status === "active" ? (
+                            {employee.status ===
+                            "active" ? (
                               <button
                                 type="button"
                                 onClick={() =>
-                                  setDeleteTarget(employee)
+                                  setDeleteTarget(
+                                    employee
+                                  )
                                 }
                                 className="rounded-lg px-2.5 py-2 text-xs font-medium text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
                               >
@@ -954,9 +1160,13 @@ export default function Employee() {
                             ) : (
                               <button
                                 type="button"
-                                disabled={actionLoading}
+                                disabled={
+                                  actionLoading
+                                }
                                 onClick={() =>
-                                  handleRestore(employee)
+                                  handleRestore(
+                                    employee
+                                  )
                                 }
                                 className="rounded-lg px-2.5 py-2 text-xs font-medium text-emerald-400 transition hover:bg-emerald-500/10 hover:text-emerald-300 disabled:opacity-50"
                               >
@@ -982,9 +1192,16 @@ export default function Employee() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                disabled={page <= 1 || loading}
+                disabled={
+                  page <= 1 || loading
+                }
                 onClick={() =>
-                  setPage((previous) => Math.max(1, previous - 1))
+                  setPage((previous) =>
+                    Math.max(
+                      1,
+                      previous - 1
+                    )
+                  )
                 }
                 className="rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-slate-400 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
               >
@@ -998,11 +1215,15 @@ export default function Employee() {
               <button
                 type="button"
                 disabled={
-                  page >= totalPages || loading
+                  page >= totalPages ||
+                  loading
                 }
                 onClick={() =>
                   setPage((previous) =>
-                    Math.min(totalPages, previous + 1)
+                    Math.min(
+                      totalPages,
+                      previous + 1
+                    )
                   )
                 }
                 className="rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-slate-400 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
@@ -1018,7 +1239,7 @@ export default function Employee() {
       {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 p-3 backdrop-blur-sm sm:p-6">
           <div className="mx-auto my-3 w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl sm:my-8">
-            {/* Modal Header */}
+
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-6">
               <div>
                 <h2 className="text-lg font-bold text-white sm:text-xl">
@@ -1036,7 +1257,9 @@ export default function Employee() {
 
               <button
                 type="button"
-                onClick={() => setShowModal(false)}
+                onClick={() =>
+                  setShowModal(false)
+                }
                 className="rounded-xl p-2 text-xl text-slate-500 transition hover:bg-white/5 hover:text-white"
               >
                 ×
@@ -1045,34 +1268,47 @@ export default function Employee() {
 
             <form onSubmit={handleSubmit}>
               <div className="max-h-[calc(100vh-160px)] overflow-y-auto px-4 py-5 sm:px-6">
-                {/* Basic */}
+
+                {/* Basic Information */}
                 <div className="mb-6">
                   <h3 className="mb-3 text-sm font-semibold text-white">
                     Basic Information
                   </h3>
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+
                     {!editingEmployee && (
                       <Field label="User *">
                         <select
                           name="userId"
                           value={form.userId}
-                          onChange={handleChange}
-                          disabled={loadingMasters}
+                          onChange={
+                            handleChange
+                          }
+                          disabled={
+                            loadingMasters
+                          }
                           className={inputClass}
                         >
                           <option value="">
                             {loadingMasters
                               ? "Loading users..."
+                              : users.length === 0
+                              ? "No active users found"
                               : "Select User"}
                           </option>
 
                           {users.map((user) => {
-                            const id = getUserId(user);
+                            const id =
+                              getUserId(user);
 
                             return (
-                              <option key={id} value={id}>
-                                {user.name} — {user.email}
+                              <option
+                                key={id}
+                                value={id}
+                              >
+                                {user.name} —{" "}
+                                {user.email}
                               </option>
                             );
                           })}
@@ -1084,36 +1320,61 @@ export default function Employee() {
                       <input
                         type="text"
                         name="employeeCode"
-                        value={form.employeeCode}
-                        onChange={handleChange}
+                        value={
+                          form.employeeCode
+                        }
+                        onChange={
+                          handleChange
+                        }
                         placeholder="EMP001"
-                        className={inputClass}
+                        className={
+                          inputClass
+                        }
                       />
                     </Field>
 
                     <Field label="Branch *">
                       <select
                         name="branchId"
-                        value={form.branchId}
-                        onChange={handleChange}
-                        disabled={loadingMasters}
-                        className={inputClass}
+                        value={
+                          form.branchId
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        disabled={
+                          loadingMasters
+                        }
+                        className={
+                          inputClass
+                        }
                       >
                         <option value="">
                           {loadingMasters
                             ? "Loading branches..."
+                            : branches.length ===
+                              0
+                            ? "No active branches found"
                             : "Select Branch"}
                         </option>
 
-                        {branches.map((branch) => {
-                          const id = getBranchId(branch);
+                        {branches.map(
+                          (branch) => {
+                            const id =
+                              getBranchId(
+                                branch
+                              );
 
-                          return (
-                            <option key={id} value={id}>
-                              {branch.name}
-                            </option>
-                          );
-                        })}
+                            return (
+                              <option
+                                key={id}
+                                value={id}
+                              >
+                                {branch.name}
+                              </option>
+                            );
+                          }
+                        )}
                       </select>
                     </Field>
 
@@ -1121,45 +1382,74 @@ export default function Employee() {
                       <input
                         type="date"
                         name="joiningDate"
-                        value={form.joiningDate}
-                        onChange={handleChange}
-                        className={inputClass}
+                        value={
+                          form.joiningDate
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        className={
+                          inputClass
+                        }
                       />
                     </Field>
 
                     <Field label="Employment Type">
                       <select
                         name="employmentType"
-                        value={form.employmentType}
-                        onChange={handleChange}
-                        className={inputClass}
+                        value={
+                          form.employmentType
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        className={
+                          inputClass
+                        }
                       >
-                        {employmentTypes.map((type) => (
-                          <option
-                            key={type.value}
-                            value={type.value}
-                          >
-                            {type.label}
-                          </option>
-                        ))}
+                        {employmentTypes.map(
+                          (type) => (
+                            <option
+                              key={
+                                type.value
+                              }
+                              value={
+                                type.value
+                              }
+                            >
+                              {type.label}
+                            </option>
+                          )
+                        )}
                       </select>
                     </Field>
 
                     <Field label="Status">
                       <select
                         name="status"
-                        value={form.status}
-                        onChange={handleChange}
-                        className={inputClass}
+                        value={
+                          form.status
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        className={
+                          inputClass
+                        }
                       >
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
+                        <option value="active">
+                          Active
+                        </option>
+
+                        <option value="inactive">
+                          Inactive
+                        </option>
                       </select>
                     </Field>
                   </div>
                 </div>
 
-                {/* Personal */}
+                {/* Personal Information */}
                 <div className="mb-6">
                   <h3 className="mb-3 text-sm font-semibold text-white">
                     Personal Information
@@ -1169,20 +1459,34 @@ export default function Employee() {
                     <Field label="Gender">
                       <select
                         name="gender"
-                        value={form.gender}
-                        onChange={handleChange}
-                        className={inputClass}
+                        value={
+                          form.gender
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        className={
+                          inputClass
+                        }
                       >
-                        <option value="">Select Gender</option>
+                        <option value="">
+                          Select Gender
+                        </option>
 
-                        {genderOptions.map((option) => (
-                          <option
-                            key={option.value}
-                            value={option.value}
-                          >
-                            {option.label}
-                          </option>
-                        ))}
+                        {genderOptions.map(
+                          (option) => (
+                            <option
+                              key={
+                                option.value
+                              }
+                              value={
+                                option.value
+                              }
+                            >
+                              {option.label}
+                            </option>
+                          )
+                        )}
                       </select>
                     </Field>
 
@@ -1190,37 +1494,55 @@ export default function Employee() {
                       <input
                         type="date"
                         name="dateOfBirth"
-                        value={form.dateOfBirth}
-                        onChange={handleChange}
-                        className={inputClass}
+                        value={
+                          form.dateOfBirth
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        className={
+                          inputClass
+                        }
                       />
                     </Field>
 
                     <Field label="Marital Status">
                       <select
                         name="maritalStatus"
-                        value={form.maritalStatus}
-                        onChange={handleChange}
-                        className={inputClass}
+                        value={
+                          form.maritalStatus
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        className={
+                          inputClass
+                        }
                       >
                         <option value="">
                           Select Marital Status
                         </option>
 
-                        {maritalOptions.map((option) => (
-                          <option
-                            key={option.value}
-                            value={option.value}
-                          >
-                            {option.label}
-                          </option>
-                        ))}
+                        {maritalOptions.map(
+                          (option) => (
+                            <option
+                              key={
+                                option.value
+                              }
+                              value={
+                                option.value
+                              }
+                            >
+                              {option.label}
+                            </option>
+                          )
+                        )}
                       </select>
                     </Field>
                   </div>
                 </div>
 
-                {/* Contact */}
+                {/* Address */}
                 <div className="mb-6">
                   <h3 className="mb-3 text-sm font-semibold text-white">
                     Address & Contact
@@ -1231,8 +1553,12 @@ export default function Employee() {
                       <Field label="Address">
                         <textarea
                           name="address"
-                          value={form.address}
-                          onChange={handleChange}
+                          value={
+                            form.address
+                          }
+                          onChange={
+                            handleChange
+                          }
                           rows={3}
                           placeholder="Full address"
                           className={`${inputClass} resize-none`}
@@ -1244,10 +1570,16 @@ export default function Employee() {
                       <input
                         type="text"
                         name="city"
-                        value={form.city}
-                        onChange={handleChange}
+                        value={
+                          form.city
+                        }
+                        onChange={
+                          handleChange
+                        }
                         placeholder="Coimbatore"
-                        className={inputClass}
+                        className={
+                          inputClass
+                        }
                       />
                     </Field>
 
@@ -1255,10 +1587,16 @@ export default function Employee() {
                       <input
                         type="text"
                         name="state"
-                        value={form.state}
-                        onChange={handleChange}
+                        value={
+                          form.state
+                        }
+                        onChange={
+                          handleChange
+                        }
                         placeholder="Tamil Nadu"
-                        className={inputClass}
+                        className={
+                          inputClass
+                        }
                       />
                     </Field>
 
@@ -1266,10 +1604,16 @@ export default function Employee() {
                       <input
                         type="text"
                         name="country"
-                        value={form.country}
-                        onChange={handleChange}
+                        value={
+                          form.country
+                        }
+                        onChange={
+                          handleChange
+                        }
                         placeholder="India"
-                        className={inputClass}
+                        className={
+                          inputClass
+                        }
                       />
                     </Field>
 
@@ -1277,10 +1621,16 @@ export default function Employee() {
                       <input
                         type="text"
                         name="postalCode"
-                        value={form.postalCode}
-                        onChange={handleChange}
+                        value={
+                          form.postalCode
+                        }
+                        onChange={
+                          handleChange
+                        }
                         placeholder="641001"
-                        className={inputClass}
+                        className={
+                          inputClass
+                        }
                       />
                     </Field>
                   </div>
@@ -1297,10 +1647,16 @@ export default function Employee() {
                       <input
                         type="text"
                         name="emergencyContactName"
-                        value={form.emergencyContactName}
-                        onChange={handleChange}
+                        value={
+                          form.emergencyContactName
+                        }
+                        onChange={
+                          handleChange
+                        }
                         placeholder="Emergency contact"
-                        className={inputClass}
+                        className={
+                          inputClass
+                        }
                       />
                     </Field>
 
@@ -1308,10 +1664,16 @@ export default function Employee() {
                       <input
                         type="text"
                         name="emergencyContactPhone"
-                        value={form.emergencyContactPhone}
-                        onChange={handleChange}
+                        value={
+                          form.emergencyContactPhone
+                        }
+                        onChange={
+                          handleChange
+                        }
                         placeholder="9876543210"
-                        className={inputClass}
+                        className={
+                          inputClass
+                        }
                       />
                     </Field>
 
@@ -1319,35 +1681,43 @@ export default function Employee() {
                       <input
                         type="text"
                         name="emergencyContactRelation"
-                        value={form.emergencyContactRelation}
-                        onChange={handleChange}
+                        value={
+                          form.emergencyContactRelation
+                        }
+                        onChange={
+                          handleChange
+                        }
                         placeholder="Brother"
-                        className={inputClass}
+                        className={
+                          inputClass
+                        }
                       />
                     </Field>
                   </div>
                 </div>
 
                 {/* Notes */}
-                <div>
-                  <Field label="Notes">
-                    <textarea
-                      name="notes"
-                      value={form.notes}
-                      onChange={handleChange}
-                      rows={4}
-                      placeholder="Additional employee notes..."
-                      className={`${inputClass} resize-none`}
-                    />
-                  </Field>
-                </div>
+                <Field label="Notes">
+                  <textarea
+                    name="notes"
+                    value={form.notes}
+                    onChange={
+                      handleChange
+                    }
+                    rows={4}
+                    placeholder="Additional employee notes..."
+                    className={`${inputClass} resize-none`}
+                  />
+                </Field>
               </div>
 
               {/* Footer */}
               <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-white/10 bg-slate-950 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() =>
+                    setShowModal(false)
+                  }
                   className="rounded-xl border border-white/10 px-5 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
                 >
                   Cancel
@@ -1361,8 +1731,8 @@ export default function Employee() {
                   {saving
                     ? "Saving..."
                     : editingEmployee
-                      ? "Update Employee"
-                      : "Create Employee"}
+                    ? "Update Employee"
+                    : "Create Employee"}
                 </button>
               </div>
             </form>
@@ -1371,197 +1741,244 @@ export default function Employee() {
       )}
 
       {/* View Modal */}
-      {showViewModal && viewingEmployee && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 p-3 backdrop-blur-sm sm:p-6">
-          <div className="mx-auto my-3 w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl sm:my-10">
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
-              <div>
-                <h2 className="text-lg font-bold text-white">
-                  Employee Details
-                </h2>
+      {showViewModal &&
+        viewingEmployee && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 p-3 backdrop-blur-sm sm:p-6">
+            <div className="mx-auto my-3 w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl sm:my-10">
 
-                <p className="text-xs text-slate-500">
-                  Complete employee profile
-                </p>
-              </div>
+              <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
+                <div>
+                  <h2 className="text-lg font-bold text-white">
+                    Employee Details
+                  </h2>
 
-              <button
-                type="button"
-                onClick={() => setShowViewModal(false)}
-                className="rounded-xl p-2 text-xl text-slate-500 hover:bg-white/5 hover:text-white"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="max-h-[calc(100vh-150px)] overflow-y-auto px-5 py-5 sm:px-6">
-              <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-xl font-bold text-emerald-400">
-                  {getUserName(viewingEmployee)
-                    .charAt(0)
-                    .toUpperCase()}
-                </div>
-
-                <div className="min-w-0">
-                  <h3 className="truncate text-xl font-bold text-white">
-                    {getUserName(viewingEmployee)}
-                  </h3>
-
-                  <p className="mt-1 text-sm text-slate-400">
-                    {getUserEmail(viewingEmployee)}
+                  <p className="text-xs text-slate-500">
+                    Complete employee profile
                   </p>
-
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <span className="rounded-lg bg-white/5 px-2.5 py-1 text-xs text-slate-300">
-                      {viewingEmployee.employeeCode || "-"}
-                    </span>
-
-                    <span className="rounded-lg bg-white/5 px-2.5 py-1 text-xs text-slate-300">
-                      {getEmploymentLabel(
-                        viewingEmployee.employmentType
-                      )}
-                    </span>
-
-                    <span
-                      className={`rounded-lg px-2.5 py-1 text-xs ${
-                        viewingEmployee.status === "active"
-                          ? "bg-emerald-500/10 text-emerald-400"
-                          : "bg-amber-500/10 text-amber-400"
-                      }`}
-                    >
-                      {viewingEmployee.status || "-"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <DetailSection title="Work Information">
-                <DetailItem
-                  label="Role"
-                  value={getRoleName(viewingEmployee)}
-                />
-
-                <DetailItem
-                  label="Department"
-                  value={getDepartment(viewingEmployee)}
-                />
-
-                <DetailItem
-                  label="Designation"
-                  value={getDesignation(viewingEmployee)}
-                />
-
-                <DetailItem
-                  label="Branch"
-                  value={getBranchName(viewingEmployee)}
-                />
-
-                <DetailItem
-                  label="Joining Date"
-                  value={formatDate(
-                    viewingEmployee.joiningDate
-                  )}
-                />
-              </DetailSection>
-
-              <DetailSection title="Personal Information">
-                <DetailItem
-                  label="Gender"
-                  value={viewingEmployee.gender}
-                />
-
-                <DetailItem
-                  label="Date of Birth"
-                  value={formatDate(
-                    viewingEmployee.dateOfBirth
-                  )}
-                />
-
-                <DetailItem
-                  label="Marital Status"
-                  value={viewingEmployee.maritalStatus}
-                />
-
-                <DetailItem
-                  label="Phone"
-                  value={getUserPhone(viewingEmployee)}
-                />
-              </DetailSection>
-
-              <DetailSection title="Address">
-                <div className="md:col-span-2 lg:col-span-3">
-                  <DetailItem
-                    label="Address"
-                    value={viewingEmployee.address}
-                  />
                 </div>
 
-                <DetailItem
-                  label="City"
-                  value={viewingEmployee.city}
-                />
-
-                <DetailItem
-                  label="State"
-                  value={viewingEmployee.state}
-                />
-
-                <DetailItem
-                  label="Country"
-                  value={viewingEmployee.country}
-                />
-
-                <DetailItem
-                  label="Postal Code"
-                  value={viewingEmployee.postalCode}
-                />
-              </DetailSection>
-
-              <DetailSection title="Emergency Contact">
-                <DetailItem
-                  label="Name"
-                  value={viewingEmployee.emergencyContactName}
-                />
-
-                <DetailItem
-                  label="Phone"
-                  value={viewingEmployee.emergencyContactPhone}
-                />
-
-                <DetailItem
-                  label="Relation"
-                  value={viewingEmployee.emergencyContactRelation}
-                />
-              </DetailSection>
-
-              {viewingEmployee.notes && (
-                <DetailSection title="Notes">
-                  <div className="md:col-span-2 lg:col-span-3">
-                    <p className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-sm leading-6 text-slate-300">
-                      {viewingEmployee.notes}
-                    </p>
-                  </div>
-                </DetailSection>
-              )}
-
-              <div className="mt-6 flex justify-end">
                 <button
                   type="button"
-                  onClick={() => setShowViewModal(false)}
-                  className="rounded-xl border border-white/10 px-5 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
+                  onClick={() =>
+                    setShowViewModal(false)
+                  }
+                  className="rounded-xl p-2 text-xl text-slate-500 hover:bg-white/5 hover:text-white"
                 >
-                  Close
+                  ×
                 </button>
+              </div>
+
+              <div className="max-h-[calc(100vh-150px)] overflow-y-auto px-5 py-5 sm:px-6">
+
+                <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:flex-row sm:items-center">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-xl font-bold text-emerald-400">
+                    {getUserName(
+                      viewingEmployee
+                    )
+                      .charAt(0)
+                      .toUpperCase()}
+                  </div>
+
+                  <div className="min-w-0">
+                    <h3 className="truncate text-xl font-bold text-white">
+                      {getUserName(
+                        viewingEmployee
+                      )}
+                    </h3>
+
+                    <p className="mt-1 text-sm text-slate-400">
+                      {getUserEmail(
+                        viewingEmployee
+                      )}
+                    </p>
+
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="rounded-lg bg-white/5 px-2.5 py-1 text-xs text-slate-300">
+                        {viewingEmployee.employeeCode ||
+                          "-"}
+                      </span>
+
+                      <span className="rounded-lg bg-white/5 px-2.5 py-1 text-xs text-slate-300">
+                        {getEmploymentLabel(
+                          viewingEmployee.employmentType
+                        )}
+                      </span>
+
+                      <span
+                        className={`rounded-lg px-2.5 py-1 text-xs ${
+                          viewingEmployee.status ===
+                          "active"
+                            ? "bg-emerald-500/10 text-emerald-400"
+                            : "bg-amber-500/10 text-amber-400"
+                        }`}
+                      >
+                        {viewingEmployee.status ||
+                          "-"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <DetailSection title="Work Information">
+                  <DetailItem
+                    label="Role"
+                    value={getRoleName(
+                      viewingEmployee
+                    )}
+                  />
+
+                  <DetailItem
+                    label="Department"
+                    value={getDepartment(
+                      viewingEmployee
+                    )}
+                  />
+
+                  <DetailItem
+                    label="Designation"
+                    value={getDesignation(
+                      viewingEmployee
+                    )}
+                  />
+
+                  <DetailItem
+                    label="Branch"
+                    value={getBranchName(
+                      viewingEmployee
+                    )}
+                  />
+
+                  <DetailItem
+                    label="Joining Date"
+                    value={formatDate(
+                      viewingEmployee.joiningDate
+                    )}
+                  />
+                </DetailSection>
+
+                <DetailSection title="Personal Information">
+                  <DetailItem
+                    label="Gender"
+                    value={
+                      viewingEmployee.gender
+                    }
+                  />
+
+                  <DetailItem
+                    label="Date of Birth"
+                    value={formatDate(
+                      viewingEmployee.dateOfBirth
+                    )}
+                  />
+
+                  <DetailItem
+                    label="Marital Status"
+                    value={
+                      viewingEmployee.maritalStatus
+                    }
+                  />
+
+                  <DetailItem
+                    label="Phone"
+                    value={getUserPhone(
+                      viewingEmployee
+                    )}
+                  />
+                </DetailSection>
+
+                <DetailSection title="Address">
+                  <div className="md:col-span-2 lg:col-span-3">
+                    <DetailItem
+                      label="Address"
+                      value={
+                        viewingEmployee.address
+                      }
+                    />
+                  </div>
+
+                  <DetailItem
+                    label="City"
+                    value={
+                      viewingEmployee.city
+                    }
+                  />
+
+                  <DetailItem
+                    label="State"
+                    value={
+                      viewingEmployee.state
+                    }
+                  />
+
+                  <DetailItem
+                    label="Country"
+                    value={
+                      viewingEmployee.country
+                    }
+                  />
+
+                  <DetailItem
+                    label="Postal Code"
+                    value={
+                      viewingEmployee.postalCode
+                    }
+                  />
+                </DetailSection>
+
+                <DetailSection title="Emergency Contact">
+                  <DetailItem
+                    label="Name"
+                    value={
+                      viewingEmployee.emergencyContactName
+                    }
+                  />
+
+                  <DetailItem
+                    label="Phone"
+                    value={
+                      viewingEmployee.emergencyContactPhone
+                    }
+                  />
+
+                  <DetailItem
+                    label="Relation"
+                    value={
+                      viewingEmployee.emergencyContactRelation
+                    }
+                  />
+                </DetailSection>
+
+                {viewingEmployee.notes && (
+                  <DetailSection title="Notes">
+                    <div className="md:col-span-2 lg:col-span-3">
+                      <p className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-sm leading-6 text-slate-300">
+                        {viewingEmployee.notes}
+                      </p>
+                    </div>
+                  </DetailSection>
+                )}
+
+                <div className="mt-6 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowViewModal(false)
+                    }
+                    className="rounded-xl border border-white/10 px-5 py-2.5 text-sm font-medium text-slate-300 transition hover:bg-white/5 hover:text-white"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Delete Confirmation */}
       {deleteTarget && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl sm:p-6">
+
             <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-red-500/10 text-red-400">
               !
             </div>
@@ -1573,16 +1990,19 @@ export default function Employee() {
             <p className="mt-2 text-sm leading-6 text-slate-400">
               This will mark{" "}
               <span className="font-semibold text-white">
-                {getUserName(deleteTarget)}
+                {getUserName(
+                  deleteTarget
+                )}
               </span>{" "}
-              as inactive. The employee record will not be permanently
-              deleted.
+              as inactive. The employee record will not be permanently deleted.
             </p>
 
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => setDeleteTarget(null)}
+                onClick={() =>
+                  setDeleteTarget(null)
+                }
                 disabled={actionLoading}
                 className="rounded-xl border border-white/10 px-5 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5"
               >
@@ -1616,6 +2036,7 @@ function Field({ label, children }) {
       <label className="mb-1.5 block text-xs font-medium text-slate-400">
         {label}
       </label>
+
       {children}
     </div>
   );

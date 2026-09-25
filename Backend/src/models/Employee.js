@@ -31,6 +31,13 @@ const employeeSchema = new mongoose.Schema(
       index: true,
     },
 
+    shiftId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Shift",
+  default: null,
+  index: true,
+},
+
     joiningDate: {
       type: Date,
     },

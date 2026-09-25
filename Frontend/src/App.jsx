@@ -1,18 +1,35 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
+// Auth
 import Login from "./pages/auth/Login.jsx";
+
+// Dashboard
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
 
+// Company
 import Company from "./pages/company/Company.jsx";
 import Branches from "./pages/company/Branches.jsx";
 
+// Users
 import Users from "./pages/users/Users.jsx";
 
+// HR
 import HR from "./pages/hr/HR.jsx";
 import Employee from "./pages/hr/Employees.jsx";
+import Attendance from "./pages/hr/Attendance.jsx";
+import Holidays from "./pages/hr/Holidays.jsx";
+import Shifts from "./pages/hr/Shifts.jsx";
+import Leave from "./pages/hr/Leave.jsx";
+import SalaryStructure from "./pages/hr/SalaryStructure.jsx";
+import Payroll from "./pages/hr/Payroll.jsx";
+import Payslips from "./pages/hr/Payslips.jsx";
+import Performance from "./pages/hr/Performance.jsx";
+import HRReports from "./pages/hr/HRReports.jsx";
 
+// Layout
 import AppLayout from "./components/layout/AppLayout.jsx";
 
+// API
 import { getToken } from "./services/api";
 
 function ProtectedRoute({ children }) {
@@ -24,10 +41,12 @@ function ProtectedRoute({ children }) {
 function App() {
   return (
     <Routes>
-      {/* Public Routes */}
+      {/* ==================== PUBLIC ROUTES ==================== */}
+
       <Route path="/login" element={<Login />} />
 
-      {/* Protected Application */}
+      {/* ==================== PROTECTED APPLICATION ==================== */}
+
       <Route
         element={
           <ProtectedRoute>
@@ -35,19 +54,22 @@ function App() {
           </ProtectedRoute>
         }
       >
-        {/* Default Route */}
+        {/* ==================== DEFAULT ==================== */}
+
         <Route
           path="/"
           element={<Navigate to="/dashboard" replace />}
         />
 
-        {/* Dashboard */}
+        {/* ==================== DASHBOARD ==================== */}
+
         <Route
           path="/dashboard"
           element={<Dashboard />}
         />
 
-        {/* Company */}
+        {/* ==================== COMPANY ==================== */}
+
         <Route
           path="/company"
           element={<Company />}
@@ -58,35 +80,83 @@ function App() {
           element={<Branches />}
         />
 
-        {/* Users */}
+        {/* ==================== USERS ==================== */}
+
         <Route
           path="/users"
           element={<Users />}
         />
 
-        {/* HR Module */}
-        <Route path="/hr" element={<HR />}>
+        {/* ==================== HR MODULE ==================== */}
+
+        <Route
+          path="/hr"
+          element={<HR />}
+        >
           {/* Employee */}
           <Route
             path="employees"
             element={<Employee />}
           />
 
-          {/* Future HR Modules */}
-          {/* 
-          <Route path="attendance" element={<Attendance />} />
-          <Route path="holidays" element={<Holidays />} />
-          <Route path="shifts" element={<Shifts />} />
-          <Route path="leave" element={<Leave />} />
-          <Route path="payroll" element={<Payroll />} />
-          <Route path="payslip" element={<Payslip />} />
-          <Route path="performance" element={<Performance />} />
-          <Route path="reports" element={<HRReports />} />
-          */}
+          {/* Attendance */}
+          <Route
+            path="attendance"
+            element={<Attendance />}
+          />
+
+          {/* Holidays */}
+          <Route
+            path="holidays"
+            element={<Holidays />}
+          />
+
+          {/* Shifts */}
+          <Route
+            path="shifts"
+            element={<Shifts />}
+          />
+
+          {/* Leave */}
+          <Route
+            path="leave"
+            element={<Leave />}
+          />
+
+          {/* Salary Structure */}
+          <Route
+            path="salary-structure"
+            element={<SalaryStructure />}
+          />
+
+          {/* Payroll */}
+          <Route
+            path="payroll"
+            element={<Payroll />}
+          />
+
+          {/* Payslips */}
+          <Route
+            path="payslip"
+            element={<Payslips />}
+          />
+
+          {/* Performance */}
+          <Route
+            path="performance"
+            element={<Performance />}
+          />
+
+          {/* HR Reports */}
+          <Route
+            path="reports"
+            element={<HRReports />}
+          />
         </Route>
       </Route>
 
-      {/* Invalid Route */}
+      {/* ==================== INVALID ROUTES ==================== */}
+
       <Route
         path="*"
         element={<Navigate to="/login" replace />}
