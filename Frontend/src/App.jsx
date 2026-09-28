@@ -9,7 +9,7 @@ import Dashboard from "./pages/dashboard/Dashboard.jsx";
 // Company
 import Company from "./pages/company/Company.jsx";
 import Branches from "./pages/company/Branches.jsx";
-
+import Customers from "./pages/customers/Customers.jsx";
 // Users
 import Users from "./pages/users/Users.jsx";
 
@@ -25,6 +25,8 @@ import Payroll from "./pages/hr/Payroll.jsx";
 import Payslips from "./pages/hr/Payslips.jsx";
 import Performance from "./pages/hr/Performance.jsx";
 import HRReports from "./pages/hr/HRReports.jsx";
+import Vendors from "./pages/vendors/Vendors.jsx";
+import Products from "./pages/products/Products.jsx";
 
 // Layout
 import AppLayout from "./components/layout/AppLayout.jsx";
@@ -86,6 +88,19 @@ function App() {
           path="/users"
           element={<Users />}
         />
+
+        <Route
+          path="/customers"
+          element={<Customers/>}
+        />
+
+
+        <Route
+          path="/vendors"
+          element={<Vendors/>}
+        />
+
+        <Route path="/products" element={<Products />} />
 
         {/* ==================== HR MODULE ==================== */}
 

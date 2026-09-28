@@ -19,6 +19,9 @@ const NAV_ITEMS = [
   { to: "/company/branches", label: "Branches", icon: Network },
   { to: "/users", label: "Users", icon: Users },
   { to: "/hr", label: "HR", icon: UsersRound },
+  { to: "/customers", label: "Customers", icon: UsersRound },
+  { to: "/vendors", label: "Vendors", icon: UsersRound },
+  { to: "/products", label: "Products", icon: UsersRound },
 ];
 
 const readUser = () => {

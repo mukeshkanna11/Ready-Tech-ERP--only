@@ -23,6 +23,10 @@ const payrollRoutes = require("./routes/payroll.routes");
 const payslipRoutes = require("./routes/payslip.routes");
 const performanceRoutes = require("./routes/performance.routes");
 const salaryStructureRoutes = require("./routes/salaryStructure.routes");
+const customerRoutes = require('./routes/customer.routes');
+const vendorRoutes = require('./routes/vendor.routes');
+const productRoutes = require('./routes/product.routes');
+
 
 
 const {
@@ -107,6 +111,18 @@ app.use("/api/leaves", leaveRoutes);
 app.use("/api/payroll", payrollRoutes);
 app.use("/api/payslips", payslipRoutes);
 app.use("/api/performance", performanceRoutes);
+app.use('/api/customers', customerRoutes);
+app.use(
+  '/api/vendors',
+  vendorRoutes
+);
+
+app.use(
+  '/api/products',
+  productRoutes
+);
+
+
 
 
 // --------------------------------------------------
