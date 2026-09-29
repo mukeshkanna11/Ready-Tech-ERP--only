@@ -338,4 +338,5 @@ customerSchema.index(
 );
 
 module.exports =
+  mongoose.models.Customer ||
   mongoose.model('Customer', customerSchema);

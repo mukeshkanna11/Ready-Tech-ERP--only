@@ -199,4 +199,6 @@ companySchema.virtual('branches', {
   foreignField: 'companyId',
 });
 
-module.exports = mongoose.model('Company', companySchema);
+module.exports =
+  mongoose.models.Company ||
+  mongoose.model('Company', companySchema);

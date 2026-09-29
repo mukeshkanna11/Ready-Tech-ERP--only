@@ -12,7 +12,11 @@ const isValidObjectId = (value) => {
   return mongoose.Types.ObjectId.isValid(value);
 };
 
-const getWorkspaceId = (req) => {
+// ------------------------------------------------------------
+// Resolve logged-in workspace -> actual Company._id
+// ------------------------------------------------------------
+
+const getProductCompanyId = async (req) => {
   const workspaceId = req.companyId;
 
   if (!workspaceId) {
@@ -31,7 +35,22 @@ const getWorkspaceId = (req) => {
     throw error;
   }
 
-  return workspaceId.toString();
+  const company = await Company.findOne({
+    workspaceId,
+    status: 'active',
+  })
+    .select('_id workspaceId status')
+    .lean();
+
+  if (!company) {
+    const error = new Error(
+      'No company found for this workspace'
+    );
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return company._id.toString();
 };
 
 const normalizeString = (value) => {
@@ -64,9 +83,13 @@ const getBranchIdFromRequest = (req) => {
   return undefined;
 };
 
-const validateBranchForWorkspace = async (
+// ------------------------------------------------------------
+// Validate branch against actual Company._id
+// ------------------------------------------------------------
+
+const validateBranchForCompany = async (
   branchId,
-  workspaceId
+  companyId
 ) => {
   if (
     branchId === null ||
@@ -92,16 +115,21 @@ const validateBranchForWorkspace = async (
     throw error;
   }
 
-  const company = await Company.findOne({
-    _id: branch.companyId,
-    workspaceId,
-  })
-    .select('_id status')
-    .lean();
+  if (
+    branch.status &&
+    branch.status !== 'active'
+  ) {
+    const error = new Error('Branch is inactive');
+    error.statusCode = 400;
+    throw error;
+  }
 
-  if (!company) {
+  if (
+    !branch.companyId ||
+    branch.companyId.toString() !== companyId.toString()
+  ) {
     const error = new Error(
-      'Branch does not belong to your workspace'
+      'Branch does not belong to your company'
     );
     error.statusCode = 400;
     throw error;
@@ -210,7 +238,11 @@ const populateProduct = (query) => {
     });
 };
 
-const sendError = (res, error, fallback) => {
+const sendError = (
+  res,
+  error,
+  fallback
+) => {
   console.error(
     'Product controller error:',
     error
@@ -282,8 +314,8 @@ const handleDuplicateKey = (
 
 const createProduct = async (req, res) => {
   try {
-    const workspaceId =
-      getWorkspaceId(req);
+    const companyId =
+      await getProductCompanyId(req);
 
     const userId =
       req.userId || null;
@@ -419,9 +451,9 @@ const createProduct = async (req, res) => {
     const branchId =
       getBranchIdFromRequest(req);
 
-    await validateBranchForWorkspace(
+    await validateBranchForCompany(
       branchId,
-      workspaceId
+      companyId
     );
 
     // ----------------------------------------------------------
@@ -430,7 +462,7 @@ const createProduct = async (req, res) => {
 
     const existingProduct =
       await Product.findOne({
-        companyId: workspaceId,
+        companyId,
         productCode:
           finalProductCode,
         deletedAt: null,
@@ -453,7 +485,7 @@ const createProduct = async (req, res) => {
     if (finalSKU) {
       const existingSKU =
         await Product.findOne({
-          companyId: workspaceId,
+          companyId,
           sku: finalSKU,
           deletedAt: null,
         })
@@ -476,7 +508,7 @@ const createProduct = async (req, res) => {
     if (finalBarcode) {
       const existingBarcode =
         await Product.findOne({
-          companyId: workspaceId,
+          companyId,
           barcode: finalBarcode,
           deletedAt: null,
         })
@@ -492,77 +524,57 @@ const createProduct = async (req, res) => {
       }
     }
 
+    // ----------------------------------------------------------
+    // Create product
+    // ----------------------------------------------------------
+
     const product =
       await Product.create({
-        companyId:
-          workspaceId,
-
+        companyId,
         branchId:
           branchId || null,
-
         productCode:
           finalProductCode,
-
         sku:
           finalSKU,
-
         name:
           finalName,
-
         displayName:
           normalizeString(displayName),
-
         productType:
           finalProductType,
-
         category:
           normalizeString(category),
-
         brand:
           normalizeString(brand),
-
         unit:
           finalUnit,
-
         hsnSac:
           normalizeUpperString(hsnSac),
-
         gstRate:
           finalGSTRate,
-
         purchasePrice:
           finalPurchasePrice,
-
         sellingPrice:
           finalSellingPrice,
-
         mrp:
           finalMRP,
-
         openingStock:
           finalOpeningStock,
-
         reorderLevel:
           finalReorderLevel,
-
         minimumStock:
           finalMinimumStock,
-
         maximumStock:
           finalMaximumStock,
-
         barcode:
           finalBarcode,
-
         description:
           normalizeString(description),
-
         status:
           finalStatus,
-
         createdBy:
           userId,
-
         updatedBy:
           userId,
       });
@@ -571,7 +583,7 @@ const createProduct = async (req, res) => {
       await populateProduct(
         Product.findOne({
           _id: product._id,
-          companyId: workspaceId,
+          companyId,
           deletedAt: null,
         })
       ).lean();
@@ -604,13 +616,17 @@ const createProduct = async (req, res) => {
 // LIST PRODUCTS
 // ============================================================
 
+// ============================================================
+// LIST PRODUCTS
+// ============================================================
+
 const getProducts = async (
   req,
   res
 ) => {
   try {
-    const workspaceId =
-      getWorkspaceId(req);
+    const companyId =
+      await getProductCompanyId(req);
 
     const page = Math.max(
       Number(req.query.page) || 1,
@@ -658,11 +674,18 @@ const getProducts = async (
         req.query.branchId
       );
 
+    // ----------------------------------------------------------
+    // BASE TENANT FILTER
+    // ----------------------------------------------------------
+
     const filter = {
-      companyId:
-        workspaceId,
+      companyId,
       deletedAt: null,
     };
+
+    // ----------------------------------------------------------
+    // STATUS FILTER
+    // ----------------------------------------------------------
 
     if (
       status &&
@@ -672,6 +695,10 @@ const getProducts = async (
     ) {
       filter.status = status;
     }
+
+    // ----------------------------------------------------------
+    // PRODUCT TYPE FILTER
+    // ----------------------------------------------------------
 
     if (
       productType &&
@@ -689,15 +716,27 @@ const getProducts = async (
         productType;
     }
 
+    // ----------------------------------------------------------
+    // CATEGORY FILTER
+    // ----------------------------------------------------------
+
     if (category) {
       filter.category =
         category;
     }
 
+    // ----------------------------------------------------------
+    // BRAND FILTER
+    // ----------------------------------------------------------
+
     if (brand) {
       filter.brand =
         brand;
     }
+
+    // ----------------------------------------------------------
+    // BRANCH FILTER
+    // ----------------------------------------------------------
 
     if (branchId) {
       if (!isValidObjectId(branchId)) {
@@ -708,14 +747,18 @@ const getProducts = async (
         });
       }
 
-      await validateBranchForWorkspace(
+      await validateBranchForCompany(
         branchId,
-        workspaceId
+        companyId
       );
 
       filter.branchId =
         branchId;
     }
+
+    // ----------------------------------------------------------
+    // SEARCH FILTER
+    // ----------------------------------------------------------
 
     if (search) {
       const regex =
@@ -749,8 +792,15 @@ const getProducts = async (
         {
           hsnSac: regex,
         },
+        {
+          description: regex,
+        },
       ];
     }
+
+    // ----------------------------------------------------------
+    // FETCH PRODUCTS + TOTAL
+    // ----------------------------------------------------------
 
     const [
       products,
@@ -768,10 +818,14 @@ const getProducts = async (
       Product.countDocuments(filter),
     ]);
 
+    // ----------------------------------------------------------
+    // PAGINATION
+    // ----------------------------------------------------------
+
     const totalPages =
-      Math.ceil(
-        total / limit
-      );
+      total > 0
+        ? Math.ceil(total / limit)
+        : 0;
 
     return res.status(200).json({
       success: true,
@@ -806,8 +860,8 @@ const getProductById = async (
   res
 ) => {
   try {
-    const workspaceId =
-      getWorkspaceId(req);
+    const companyId =
+      await getProductCompanyId(req);
 
     const { id } =
       req.params;
@@ -824,8 +878,7 @@ const getProductById = async (
       await populateProduct(
         Product.findOne({
           _id: id,
-          companyId:
-            workspaceId,
+          companyId,
           deletedAt: null,
         })
       ).lean();
@@ -860,8 +913,8 @@ const updateProduct = async (
   res
 ) => {
   try {
-    const workspaceId =
-      getWorkspaceId(req);
+    const companyId =
+      await getProductCompanyId(req);
 
     const userId =
       req.userId || null;
@@ -880,8 +933,7 @@ const updateProduct = async (
     const product =
       await Product.findOne({
         _id: id,
-        companyId:
-          workspaceId,
+        companyId,
         deletedAt: null,
       });
 
@@ -928,8 +980,7 @@ const updateProduct = async (
             _id: {
               $ne: id,
             },
-            companyId:
-              workspaceId,
+            companyId,
             productCode:
               newProductCode,
             deletedAt: null,
@@ -974,8 +1025,7 @@ const updateProduct = async (
             _id: {
               $ne: id,
             },
-            companyId:
-              workspaceId,
+            companyId,
             sku: newSKU,
             deletedAt: null,
           })
@@ -1271,8 +1321,7 @@ const updateProduct = async (
             _id: {
               $ne: id,
             },
-            companyId:
-              workspaceId,
+            companyId,
             barcode:
               newBarcode,
             deletedAt: null,
@@ -1326,9 +1375,9 @@ const updateProduct = async (
         product.branchId =
           null;
       } else {
-        await validateBranchForWorkspace(
+        await validateBranchForCompany(
           body.branchId,
-          workspaceId
+          companyId
         );
 
         product.branchId =
@@ -1345,8 +1394,7 @@ const updateProduct = async (
       await populateProduct(
         Product.findOne({
           _id: product._id,
-          companyId:
-            workspaceId,
+          companyId,
           deletedAt: null,
         })
       ).lean();
@@ -1384,8 +1432,8 @@ const deleteProduct = async (
   res
 ) => {
   try {
-    const workspaceId =
-      getWorkspaceId(req);
+    const companyId =
+      await getProductCompanyId(req);
 
     const userId =
       req.userId || null;
@@ -1404,8 +1452,7 @@ const deleteProduct = async (
     const product =
       await Product.findOne({
         _id: id,
-        companyId:
-          workspaceId,
+        companyId,
         deletedAt: null,
       });
 
@@ -1451,8 +1498,8 @@ const restoreProduct = async (
   res
 ) => {
   try {
-    const workspaceId =
-      getWorkspaceId(req);
+    const companyId =
+      await getProductCompanyId(req);
 
     const userId =
       req.userId || null;
@@ -1471,8 +1518,7 @@ const restoreProduct = async (
     const product =
       await Product.findOne({
         _id: id,
-        companyId:
-          workspaceId,
+        companyId,
         deletedAt: {
           $ne: null,
         },
@@ -1495,8 +1541,7 @@ const restoreProduct = async (
         _id: {
           $ne: id,
         },
-        companyId:
-          workspaceId,
+        companyId,
         productCode:
           product.productCode,
         deletedAt: null,
@@ -1522,8 +1567,7 @@ const restoreProduct = async (
           _id: {
             $ne: id,
           },
-          companyId:
-            workspaceId,
+          companyId,
           sku:
             product.sku,
           deletedAt: null,
@@ -1550,8 +1594,7 @@ const restoreProduct = async (
           _id: {
             $ne: id,
           },
-          companyId:
-            workspaceId,
+          companyId,
           barcode:
             product.barcode,
           deletedAt: null,
@@ -1583,8 +1626,7 @@ const restoreProduct = async (
       await populateProduct(
         Product.findOne({
           _id: product._id,
-          companyId:
-            workspaceId,
+          companyId,
           deletedAt: null,
         })
       ).lean();

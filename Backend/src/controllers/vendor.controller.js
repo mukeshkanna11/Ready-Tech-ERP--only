@@ -36,6 +36,27 @@ const getWorkspaceId = (req) => {
   return workspaceId.toString();
 };
 
+/*
+ * Resolve the actual Company._id for the authenticated
+ * workspace. Vendor.companyId stores Company._id.
+ */
+const getVendorCompanyId = async (workspaceId) => {
+  const company = await Company.findOne({ workspaceId })
+    .select('_id')
+    .lean();
+
+  if (!company) {
+    const error = new Error(
+      'No company found for this workspace'
+    );
+
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return company._id.toString();
+};
+
 const normalizeAddress = (address = {}) => {
   return {
     addressLine1:
@@ -146,7 +167,8 @@ const getBranchIdFromRequest = (req) => {
  */
 const validateBranchForWorkspace = async (
   branchId,
-  workspaceId
+  workspaceId,
+  vendorCompanyId
 ) => {
   if (
     branchId === null ||
@@ -185,7 +207,11 @@ const validateBranchForWorkspace = async (
     .select('_id status')
     .lean();
 
-  if (!company) {
+  if (
+    !company ||
+    (vendorCompanyId &&
+      company._id.toString() !== vendorCompanyId)
+  ) {
     const error = new Error(
       'Branch does not belong to your workspace'
     );
@@ -220,6 +246,8 @@ const sendError = (res, error, fallback) => {
 const createVendor = async (req, res) => {
   try {
     const workspaceId = getWorkspaceId(req);
+    const vendorCompanyId =
+      await getVendorCompanyId(workspaceId);
     const userId = req.userId || null;
 
     const {
@@ -345,7 +373,8 @@ const createVendor = async (req, res) => {
 
     await validateBranchForWorkspace(
       branchId,
-      workspaceId
+      workspaceId,
+      vendorCompanyId
     );
 
     /*
@@ -353,7 +382,7 @@ const createVendor = async (req, res) => {
      */
     const existingVendor =
       await Vendor.findOne({
-        companyId: workspaceId,
+        companyId: vendorCompanyId,
         vendorCode: finalVendorCode,
         deletedAt: null,
       })
@@ -374,7 +403,7 @@ const createVendor = async (req, res) => {
     if (finalGST) {
       const existingGST =
         await Vendor.findOne({
-          companyId: workspaceId,
+          companyId: vendorCompanyId,
           gstNumber: finalGST,
           deletedAt: null,
         })
@@ -392,7 +421,7 @@ const createVendor = async (req, res) => {
 
     const vendor =
       await Vendor.create({
-        companyId: workspaceId,
+        companyId: vendorCompanyId,
 
         branchId:
           branchId || null,
@@ -470,7 +499,7 @@ const createVendor = async (req, res) => {
     const populatedVendor =
       await Vendor.findOne({
         _id: vendor._id,
-        companyId: workspaceId,
+        companyId: vendorCompanyId,
       })
         .populate({
           path: 'branchId',
@@ -545,6 +574,8 @@ const createVendor = async (req, res) => {
 const getVendors = async (req, res) => {
   try {
     const workspaceId = getWorkspaceId(req);
+    const vendorCompanyId =
+      await getVendorCompanyId(workspaceId);
 
     const page = Math.max(
       Number(req.query.page) || 1,
@@ -583,7 +614,7 @@ const getVendors = async (req, res) => {
       );
 
     const filter = {
-      companyId: workspaceId,
+      companyId: vendorCompanyId,
       deletedAt: null,
     };
 
@@ -617,7 +648,8 @@ const getVendors = async (req, res) => {
 
       await validateBranchForWorkspace(
         branchId,
-        workspaceId
+        workspaceId,
+        vendorCompanyId
       );
 
       filter.branchId = branchId;
@@ -729,6 +761,8 @@ const getVendorById = async (
     const workspaceId = getWorkspaceId(
       req
     );
+    const vendorCompanyId =
+      await getVendorCompanyId(workspaceId);
 
     const { id } = req.params;
 
@@ -742,7 +776,7 @@ const getVendorById = async (
     const vendor =
       await Vendor.findOne({
         _id: id,
-        companyId: workspaceId,
+        companyId: vendorCompanyId,
         deletedAt: null,
       })
         .populate({
@@ -793,6 +827,8 @@ const updateVendor = async (
   try {
     const workspaceId =
       getWorkspaceId(req);
+    const vendorCompanyId =
+      await getVendorCompanyId(workspaceId);
 
     const userId =
       req.userId || null;
@@ -809,7 +845,7 @@ const updateVendor = async (
     const vendor =
       await Vendor.findOne({
         _id: id,
-        companyId: workspaceId,
+        companyId: vendorCompanyId,
         deletedAt: null,
       });
 
@@ -853,7 +889,7 @@ const updateVendor = async (
             _id: {
               $ne: id,
             },
-            companyId: workspaceId,
+            companyId: vendorCompanyId,
             vendorCode:
               newVendorCode,
             deletedAt: null,
@@ -991,7 +1027,7 @@ const updateVendor = async (
             _id: {
               $ne: id,
             },
-            companyId: workspaceId,
+            companyId: vendorCompanyId,
             gstNumber: gst,
             deletedAt: null,
           })
@@ -1179,7 +1215,8 @@ const updateVendor = async (
       } else {
         await validateBranchForWorkspace(
           body.branchId,
-          workspaceId
+          workspaceId,
+          vendorCompanyId
         );
 
         vendor.branchId =
@@ -1195,7 +1232,7 @@ const updateVendor = async (
     const updatedVendor =
       await Vendor.findOne({
         _id: vendor._id,
-        companyId: workspaceId,
+        companyId: vendorCompanyId,
         deletedAt: null,
       })
         .populate({
@@ -1272,6 +1309,8 @@ const deleteVendor = async (
   try {
     const workspaceId =
       getWorkspaceId(req);
+    const vendorCompanyId =
+      await getVendorCompanyId(workspaceId);
 
     const userId =
       req.userId || null;
@@ -1288,7 +1327,7 @@ const deleteVendor = async (
     const vendor =
       await Vendor.findOne({
         _id: id,
-        companyId: workspaceId,
+        companyId: vendorCompanyId,
         deletedAt: null,
       });
 
@@ -1338,6 +1377,8 @@ const restoreVendor = async (
   try {
     const workspaceId =
       getWorkspaceId(req);
+    const vendorCompanyId =
+      await getVendorCompanyId(workspaceId);
 
     const userId =
       req.userId || null;
@@ -1354,7 +1395,7 @@ const restoreVendor = async (
     const vendor =
       await Vendor.findOne({
         _id: id,
-        companyId: workspaceId,
+        companyId: vendorCompanyId,
         deletedAt: {
           $ne: null,
         },
@@ -1377,7 +1418,7 @@ const restoreVendor = async (
         _id: {
           $ne: id,
         },
-        companyId: workspaceId,
+        companyId: vendorCompanyId,
         vendorCode:
           vendor.vendorCode,
         deletedAt: null,
@@ -1399,7 +1440,7 @@ const restoreVendor = async (
           _id: {
             $ne: id,
           },
-          companyId: workspaceId,
+          companyId: vendorCompanyId,
           gstNumber:
             vendor.gstNumber,
           deletedAt: null,

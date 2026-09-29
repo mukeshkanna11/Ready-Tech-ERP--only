@@ -27,6 +27,12 @@ import Performance from "./pages/hr/Performance.jsx";
 import HRReports from "./pages/hr/HRReports.jsx";
 import Vendors from "./pages/vendors/Vendors.jsx";
 import Products from "./pages/products/Products.jsx";
+import Inventory from './pages/inventory/Inventory.jsx';
+import Purchase from "./pages/purchase/Purchase.jsx";
+import Sales from "./pages/sales/Sales.jsx";
+import Quotations from "./pages/sales/Quotations.jsx";
+import SalesOrder from "./pages/sales/SalesOrders.jsx";
+
 
 // Layout
 import AppLayout from "./components/layout/AppLayout.jsx";
@@ -102,12 +108,20 @@ function App() {
 
         <Route path="/products" element={<Products />} />
 
+         <Route path="/inventory" element={<Inventory />} />
+<Route path="/purchase" element={<Purchase />} />
+<Route path="/sales" element={<Sales />} />
+<Route path="/quotations" element={<Quotations />} />
+<Route path="/salesorder" element={<SalesOrder />} />
+
+
+
         {/* ==================== HR MODULE ==================== */}
 
         <Route
           path="/hr"
           element={<HR />}
-        >
+        >  
           {/* Employee */}
           <Route
             path="employees"

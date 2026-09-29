@@ -96,4 +96,6 @@ branchSchema.index({
   createdAt: -1,
 });
 
-module.exports = mongoose.model('Branch', branchSchema);
+module.exports =
+  mongoose.models.Branch ||
+  mongoose.model('Branch', branchSchema);

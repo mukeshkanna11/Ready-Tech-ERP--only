@@ -39,6 +39,7 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
+import { getToken, clearSession } from "../../services/api";
 
 /* =========================================================
    API
@@ -107,33 +108,6 @@ const EMPTY_FORM = {
   branchId: "",
 };
 
-const TOKEN_KEYS = [
-  "token",
-  "accessToken",
-  "access_token",
-  "authToken",
-  "jwt",
-  "jwtToken",
-  "idToken",
-  "id_token",
-  "erpToken",
-  "erp_token",
-  "userToken",
-];
-
-const AUTH_OBJECT_KEYS = [
-  "auth",
-  "authData",
-  "user",
-  "userData",
-  "currentUser",
-  "session",
-  "loginData",
-  "loginResponse",
-  "authState",
-  "userSession",
-];
-
 /* =========================================================
    HELPERS
 ========================================================= */
@@ -141,217 +115,6 @@ const AUTH_OBJECT_KEYS = [
 const safeString = (value) => {
   if (value === null || value === undefined) return "";
   return String(value);
-};
-
-const normalizeToken = (value) => {
-  if (!value) return "";
-
-  return String(value)
-    .trim()
-    .replace(/^Bearer\s+/i, "")
-    .trim();
-};
-
-const isJwt = (value) => {
-  const token = normalizeToken(value);
-
-  if (!token) return false;
-
-  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(
-    token
-  );
-};
-
-const findTokenInObject = (value, depth = 0) => {
-  if (!value || depth > 6) return "";
-
-  if (typeof value === "string") {
-    const token = normalizeToken(value);
-
-    return isJwt(token) ? token : "";
-  }
-
-  if (typeof value !== "object") {
-    return "";
-  }
-
-  const priorityKeys = [
-    "token",
-    "accessToken",
-    "access_token",
-    "jwt",
-    "jwtToken",
-    "authToken",
-    "idToken",
-    "id_token",
-  ];
-
-  for (const key of priorityKeys) {
-    if (!value[key]) continue;
-
-    const token = findTokenInObject(
-      value[key],
-      depth + 1
-    );
-
-    if (token) return token;
-  }
-
-  for (const key of Object.keys(value)) {
-    const child = value[key];
-
-    if (!child) continue;
-
-    if (
-      /token|auth|session|credential|login|user/i.test(
-        key
-      )
-    ) {
-      const token = findTokenInObject(
-        child,
-        depth + 1
-      );
-
-      if (token) return token;
-    }
-  }
-
-  return "";
-};
-
-const readStorageToken = (storage) => {
-  if (!storage) return "";
-
-  try {
-    /* Direct token keys */
-    for (const key of TOKEN_KEYS) {
-      const value = storage.getItem(key);
-
-      if (!value) continue;
-
-      const directToken = normalizeToken(value);
-
-      if (isJwt(directToken)) {
-        return directToken;
-      }
-
-      try {
-        const parsed = JSON.parse(value);
-
-        const nestedToken = findTokenInObject(
-          parsed
-        );
-
-        if (nestedToken) {
-          return nestedToken;
-        }
-      } catch {
-        /* Ignore malformed JSON */
-      }
-    }
-
-    /* Auth objects */
-    for (const key of AUTH_OBJECT_KEYS) {
-      const value = storage.getItem(key);
-
-      if (!value) continue;
-
-      try {
-        const parsed = JSON.parse(value);
-
-        const nestedToken = findTokenInObject(
-          parsed
-        );
-
-        if (nestedToken) {
-          return nestedToken;
-        }
-      } catch {
-        const directToken = normalizeToken(value);
-
-        if (isJwt(directToken)) {
-          return directToken;
-        }
-      }
-    }
-
-    /* Fallback scan */
-    for (
-      let index = 0;
-      index < storage.length;
-      index += 1
-    ) {
-      const key = storage.key(index);
-
-      if (!key) continue;
-
-      const lowerKey = key.toLowerCase();
-
-      if (
-        !lowerKey.includes("token") &&
-        !lowerKey.includes("auth") &&
-        !lowerKey.includes("session") &&
-        !lowerKey.includes("login") &&
-        !lowerKey.includes("user")
-      ) {
-        continue;
-      }
-
-      const value = storage.getItem(key);
-
-      if (!value) continue;
-
-      const directToken = normalizeToken(value);
-
-      if (isJwt(directToken)) {
-        return directToken;
-      }
-
-      try {
-        const parsed = JSON.parse(value);
-
-        const nestedToken = findTokenInObject(
-          parsed
-        );
-
-        if (nestedToken) {
-          return nestedToken;
-        }
-      } catch {
-        /* Ignore */
-      }
-    }
-  } catch (error) {
-    console.warn(
-      "Products: unable to read storage token.",
-      error
-    );
-  }
-
-  return "";
-};
-
-const getToken = () => {
-  try {
-    const localToken = readStorageToken(
-      window.localStorage
-    );
-
-    if (localToken) return localToken;
-
-    const sessionToken = readStorageToken(
-      window.sessionStorage
-    );
-
-    if (sessionToken) return sessionToken;
-  } catch (error) {
-    console.warn(
-      "Products: storage access failed.",
-      error
-    );
-  }
-
-  return "";
 };
 
 const parseResponse = async (response) => {
@@ -425,6 +188,15 @@ const getApiErrorMessage = (
   return `Request failed with status ${status}.`;
 };
 
+/* Clear the stale session and send the user to login once (no retry loop). */
+const handleUnauthorized = () => {
+  clearSession();
+
+  if (window.location.pathname !== "/login") {
+    window.location.replace("/login");
+  }
+};
+
 const apiRequest = async (
   path,
   options = {}
@@ -432,6 +204,7 @@ const apiRequest = async (
   const token = getToken();
 
   if (!token) {
+    handleUnauthorized();
     throw new Error(
       "Authentication token is missing. Please login again."
     );
@@ -463,6 +236,10 @@ const apiRequest = async (
   const data = await parseResponse(response);
 
   if (!response.ok) {
+    if (response.status === 401) {
+      handleUnauthorized();
+    }
+
     throw new Error(
       getApiErrorMessage(
         data,

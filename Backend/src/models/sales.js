@@ -1,24 +1,11 @@
 const mongoose = require('mongoose');
 
-const addressSchema = new mongoose.Schema(
-  {
-    line1: { type: String, trim: true, default: '' },
-    line2: { type: String, trim: true, default: '' },
-    city: { type: String, trim: true, default: '' },
-    state: { type: String, trim: true, default: '' },
-    country: { type: String, trim: true, default: '' },
-    postalCode: { type: String, trim: true, default: '' },
-  },
-  { _id: false }
-);
-
-const salesOrderItemSchema = new mongoose.Schema(
+const salesItemSchema = new mongoose.Schema(
   {
     productId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product',
       required: true,
-      index: true,
     },
 
     productCode: {
@@ -38,7 +25,7 @@ const salesOrderItemSchema = new mongoose.Schema(
     productName: {
       type: String,
       trim: true,
-      required: true,
+      default: '',
     },
 
     description: {
@@ -107,11 +94,10 @@ const salesOrderItemSchema = new mongoose.Schema(
   { _id: true }
 );
 
-const salesOrderSchema = new mongoose.Schema(
+const salesSchema = new mongoose.Schema(
   {
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Company',
       required: true,
       index: true,
     },
@@ -130,19 +116,11 @@ const salesOrderSchema = new mongoose.Schema(
       index: true,
     },
 
-    quotationId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Quotation',
-      default: null,
-      index: true,
-    },
-
-    orderNumber: {
+    invoiceNumber: {
       type: String,
       required: true,
       trim: true,
       uppercase: true,
-      index: true,
     },
 
     referenceNumber: {
@@ -151,40 +129,28 @@ const salesOrderSchema = new mongoose.Schema(
       default: '',
     },
 
-    orderDate: {
+    saleDate: {
       type: Date,
+      required: true,
       default: Date.now,
       index: true,
     },
 
-    expectedDeliveryDate: {
+    dueDate: {
       type: Date,
       default: null,
     },
 
     status: {
       type: String,
-      enum: [
-        'draft',
-        'confirmed',
-        'processing',
-        'partially_delivered',
-        'delivered',
-        'cancelled',
-        'closed',
-      ],
+      enum: ['draft', 'confirmed', 'completed', 'cancelled'],
       default: 'draft',
       index: true,
     },
 
     paymentStatus: {
       type: String,
-      enum: [
-        'unpaid',
-        'partial',
-        'paid',
-        'refunded',
-      ],
+      enum: ['unpaid', 'partial', 'paid', 'refunded'],
       default: 'unpaid',
       index: true,
     },
@@ -196,13 +162,11 @@ const salesOrderSchema = new mongoose.Schema(
     },
 
     items: {
-      type: [salesOrderItemSchema],
-      required: true,
+      type: [salesItemSchema],
       validate: {
-        validator: function (items) {
-          return Array.isArray(items) && items.length > 0;
-        },
-        message: 'At least one item is required',
+        validator: (items) =>
+          Array.isArray(items) && items.length > 0,
+        message: 'At least one sales item is required',
       },
     },
 
@@ -273,13 +237,13 @@ const salesOrderSchema = new mongoose.Schema(
     },
 
     billingAddress: {
-      type: addressSchema,
-      default: () => ({}),
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
     },
 
     shippingAddress: {
-      type: addressSchema,
-      default: () => ({}),
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
     },
 
     notes: {
@@ -294,23 +258,13 @@ const salesOrderSchema = new mongoose.Schema(
       default: '',
     },
 
-    customerNotes: {
-      type: String,
-      trim: true,
-      default: '',
+    stockUpdated: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
 
-    confirmedAt: {
-      type: Date,
-      default: null,
-    },
-
-    processingAt: {
-      type: Date,
-      default: null,
-    },
-
-    deliveredAt: {
+    stockUpdatedAt: {
       type: Date,
       default: null,
     },
@@ -323,22 +277,6 @@ const salesOrderSchema = new mongoose.Schema(
     cancelledBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      default: null,
-    },
-
-    closedAt: {
-      type: Date,
-      default: null,
-    },
-
-    convertedToSales: {
-      type: Boolean,
-      default: false,
-    },
-
-    salesId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Sales',
       default: null,
     },
 
@@ -371,30 +309,41 @@ const salesOrderSchema = new mongoose.Schema(
   }
 );
 
-salesOrderSchema.index({
-  companyId: 1,
-  orderNumber: 1,
-}, {
-  unique: true,
-});
+salesSchema.index(
+  {
+    companyId: 1,
+    invoiceNumber: 1,
+  },
+  {
+    unique: true,
+  }
+);
 
-salesOrderSchema.index({
+salesSchema.index({
   companyId: 1,
   status: 1,
-  orderDate: -1,
+  saleDate: -1,
 });
 
-salesOrderSchema.index({
+salesSchema.index({
   companyId: 1,
   customerId: 1,
-  orderDate: -1,
+  saleDate: -1,
 });
 
-salesOrderSchema.index({
+salesSchema.index({
   companyId: 1,
-  quotationId: 1,
+  branchId: 1,
+  status: 1,
+  saleDate: -1,
+});
+
+salesSchema.index({
+  companyId: 1,
+  deletedAt: 1,
+  createdAt: -1,
 });
 
 module.exports =
-  mongoose.models.SalesOrder ||
-  mongoose.model('SalesOrder', salesOrderSchema);
+  mongoose.models.Sales ||
+  mongoose.model('Sales', salesSchema);

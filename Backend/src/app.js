@@ -26,6 +26,12 @@ const salaryStructureRoutes = require("./routes/salaryStructure.routes");
 const customerRoutes = require('./routes/customer.routes');
 const vendorRoutes = require('./routes/vendor.routes');
 const productRoutes = require('./routes/product.routes');
+const inventoryRoutes = require('./routes/inventory.routes');
+const purchaseRoutes = require('./routes/purchase.routes');
+const salesRoutes = require("./routes/sales.routes");
+const quotationRoutes = require("./routes/quotation.routes");
+const salesOrderRoutes = require("./routes/salesorder.routes");
+
 
 
 
@@ -123,6 +129,14 @@ app.use(
 );
 
 
+app.use(
+  '/api/inventory',
+  inventoryRoutes
+);
+app.use('/api/purchases', purchaseRoutes);
+app.use("/api/sales", salesRoutes);
+app.use("/api/quotations", quotationRoutes);
+app.use("/api/salesorder", salesOrderRoutes);
 
 
 // --------------------------------------------------
