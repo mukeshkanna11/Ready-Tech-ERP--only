@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import {
   NavLink,
   Outlet,
@@ -19,7 +20,14 @@ import {
   FileText,
   ClipboardList,
   Receipt,
+  CreditCard,
   Menu,
+  Wallet,
+  Landmark,
+  FolderKanban,
+  ListTodo,
+  BarChart3,
+  GitBranch,
   X,
   LogOut,
 } from "lucide-react";
@@ -32,67 +40,127 @@ const NAV_ITEMS = [
     label: "Dashboard",
     icon: LayoutDashboard,
   },
+
   {
     to: "/company",
     label: "Companies",
     icon: Building2,
     end: true,
   },
+
   {
     to: "/company/branches",
     label: "Branches",
     icon: Network,
   },
+
   {
     to: "/users",
     label: "Users",
     icon: Users,
   },
+
   {
     to: "/hr",
     label: "HR",
     icon: UserCog,
   },
+
   {
     to: "/customers",
     label: "Customers",
     icon: UserRound,
   },
+
   {
     to: "/vendors",
     label: "Vendors",
     icon: Store,
   },
+
   {
     to: "/products",
     label: "Products",
     icon: Package,
   },
+
   {
     to: "/inventory",
     label: "Inventory",
     icon: Boxes,
   },
+
   {
     to: "/purchase",
     label: "Purchase",
     icon: ShoppingCart,
   },
+
   {
     to: "/sales",
     label: "Sales",
     icon: Receipt,
   },
+
   {
     to: "/quotations",
     label: "Quotations",
     icon: FileText,
   },
+
   {
     to: "/salesorder",
     label: "Sales Orders",
     icon: ClipboardList,
   },
+
+  {
+    to: "/invoices",
+    label: "Invoices",
+    icon: ClipboardList,
+  },
+
+  {
+    to: "/payments",
+    label: "Payments",
+    icon: CreditCard,
+  },
+
+  {
+    to: "/expenses",
+    label: "Expenses",
+    icon: Wallet,
+  },
+
+  {
+    to: "/accounting",
+    label: "Finance",
+    icon: Landmark,
+  },
+
+  {
+    to: "/projects",
+    label: "Projects",
+    icon: FolderKanban,
+  },
+
+  {
+    to: "/projects/tasks",
+    label: "Tasks",
+    icon: ListTodo,
+  },
+
+  {
+    to: "/workflow",
+    label: "Workflow",
+    icon: GitBranch,
+  },
+{
+  to: "/reports",
+  label: "Reports",
+  icon: BarChart3,
+},
+
 ];
 
 const readUser = () => {
@@ -143,14 +211,17 @@ const navClass = ({ isActive }) =>
 
 const AppLayout = () => {
   const navigate = useNavigate();
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] =
+    useState(false);
 
   const user = readUser();
 
   const handleLogout = () => {
     clearSession();
     setDrawerOpen(false);
-    navigate("/login", { replace: true });
+    navigate("/login", {
+      replace: true,
+    });
   };
 
   const closeDrawer = () => {
@@ -203,7 +274,12 @@ const AppLayout = () => {
 
         <ul className="space-y-1">
           {NAV_ITEMS.map(
-            ({ to, label, icon: Icon, end }) => (
+            ({
+              to,
+              label,
+              icon: Icon,
+              end,
+            }) => (
               <li key={to}>
                 <NavLink
                   to={to}
@@ -223,7 +299,7 @@ const AppLayout = () => {
                         }`}
                       />
 
-                      {/* Icon container */}
+                      {/* Icon */}
                       <span
                         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all ${
                           isActive
@@ -231,13 +307,18 @@ const AppLayout = () => {
                             : "text-gray-500 group-hover:bg-white/[0.04] group-hover:text-gray-200"
                         }`}
                       >
-                        <Icon size={17} strokeWidth={1.8} />
+                        <Icon
+                          size={17}
+                          strokeWidth={1.8}
+                        />
                       </span>
 
+                      {/* Label */}
                       <span className="min-w-0 flex-1 truncate">
                         {label}
                       </span>
 
+                      {/* Active dot */}
                       {isActive && (
                         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.7)]" />
                       )}
@@ -264,7 +345,8 @@ const AppLayout = () => {
             {/* User details */}
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium text-gray-200">
-                {user?.name || "Signed in"}
+                {user?.name ||
+                  "Signed in"}
               </p>
 
               <p className="truncate text-[11px] text-gray-600">
@@ -305,7 +387,8 @@ const AppLayout = () => {
         style={{
           backgroundImage:
             "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
-          backgroundSize: "48px 48px",
+          backgroundSize:
+            "48px 48px",
         }}
       />
 
@@ -338,7 +421,9 @@ const AppLayout = () => {
         <header className="z-30 flex shrink-0 items-center gap-3 border-b border-white/[0.07] bg-[#05070b]/90 px-3 py-3 backdrop-blur-xl sm:px-5 lg:hidden">
           <button
             type="button"
-            onClick={() => setDrawerOpen(true)}
+            onClick={() =>
+              setDrawerOpen(true)
+            }
             aria-label="Open navigation"
             aria-expanded={drawerOpen}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-gray-300 transition hover:border-white/20 hover:bg-white/[0.07] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400"

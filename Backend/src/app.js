@@ -31,8 +31,15 @@ const purchaseRoutes = require('./routes/purchase.routes');
 const salesRoutes = require("./routes/sales.routes");
 const quotationRoutes = require("./routes/quotation.routes");
 const salesOrderRoutes = require("./routes/salesorder.routes");
-
-
+const invoiceRoutes = require("./routes/invoice.routes");
+const paymentRoutes = require("./routes/payment.routes");
+const expenseRoutes = require("./routes/expense.routes");
+const accountRoutes = require("./routes/account.routes");
+const journalEntryRoutes = require("./routes/journalEntry.routes");
+const financialReportRoutes = require("./routes/financialReport.routes");
+const projectRoutes = require("./routes/project.routes");
+const workflowRoutes = require("./routes/workflow.routes");
+const reportsRoutes = require("./routes/reports.routes");
 
 
 const {
@@ -137,6 +144,27 @@ app.use('/api/purchases', purchaseRoutes);
 app.use("/api/sales", salesRoutes);
 app.use("/api/quotations", quotationRoutes);
 app.use("/api/salesorder", salesOrderRoutes);
+app.use("/api/invoices", invoiceRoutes);
+app.use(
+  "/api/payments",
+  paymentRoutes
+);
+
+app.use(
+  "/api/expenses",
+  expenseRoutes
+);
+app.use("/api/accounts", accountRoutes);
+
+app.use("/api/journal-entries", journalEntryRoutes);
+
+app.use("/api/financial-reports", financialReportRoutes);
+
+app.use("/api/projects", projectRoutes);
+
+app.use("/api/workflows", workflowRoutes);
+
+app.use("/api/reports", reportsRoutes);
 
 
 // --------------------------------------------------
