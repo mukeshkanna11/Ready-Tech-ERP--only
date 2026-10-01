@@ -5,6 +5,7 @@ import Login from "./pages/auth/Login.jsx";
 
 // ==================== DASHBOARD ====================
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
+import SupportChat from "./pages/support/SupportChat.jsx";
 
 // ==================== COMPANY ====================
 import Company from "./pages/company/Company.jsx";
@@ -147,6 +148,11 @@ function App() {
         <Route
           path="/dashboard"
           element={<Dashboard />}
+        />
+
+        <Route
+          path="/support"
+          element={<SupportChat />}
         />
 
         {/* ====================================================

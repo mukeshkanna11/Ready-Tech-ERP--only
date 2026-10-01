@@ -3,6 +3,7 @@ import { useState } from "react";
 import {
   NavLink,
   Outlet,
+  useLocation,
   useNavigate,
 } from "react-router-dom";
 
@@ -36,6 +37,7 @@ import {
   Lightbulb,
   TrendingUp,
   Workflow,
+  BrainCircuit,
 } from "lucide-react";
 
 import { clearSession } from "../../services/api";
@@ -226,6 +228,7 @@ const navClass = ({ isActive }) =>
 
 const AppLayout = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [drawerOpen, setDrawerOpen] =
     useState(false);
 
@@ -481,6 +484,18 @@ const AppLayout = () => {
         <main className="relative min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           <Outlet />
         </main>
+
+        {location.pathname !== "/support" && (
+          <button
+            type="button"
+            onClick={() => navigate("/support")}
+            aria-label="Open helpdesk"
+            title="Helpdesk"
+            className="fixed bottom-5 right-5 z-[9999] flex h-12 w-12 items-center justify-center rounded-full border border-cyan-300/30 bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_12px_40px_rgba(6,182,212,0.35)] transition hover:scale-105 hover:brightness-110 active:scale-95 sm:bottom-6 sm:right-6"
+          >
+            <BrainCircuit size={20} />
+          </button>
+        )}
       </div>
     </div>
   );

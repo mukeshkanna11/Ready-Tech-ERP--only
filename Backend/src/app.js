@@ -41,7 +41,7 @@ const projectRoutes = require("./routes/project.routes");
 const workflowRoutes = require("./routes/workflow.routes");
 const reportsRoutes = require("./routes/reports.routes");
 const aiRoutes = require("./routes/ai.routes");
-
+const supportRoutes = require("./routes/support.routes");
 
 const {
   notFound,
@@ -167,7 +167,7 @@ app.use("/api/workflows", workflowRoutes);
 
 app.use("/api/reports", reportsRoutes);
 app.use("/api/ai", aiRoutes);
-
+app.use("/api/support", supportRoutes);
 
 // --------------------------------------------------
 // 404 Handler
