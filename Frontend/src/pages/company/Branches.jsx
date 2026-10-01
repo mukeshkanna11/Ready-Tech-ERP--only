@@ -275,11 +275,9 @@ function Branches() {
     }));
   };
 
-  // companyId is intentionally never sent: the backend derives it from the
-  // auth token so a branch can only be filed under the signed-in company.
   const buildPayload = () => ({
     name: form.name.trim(),
-    code: form.code.trim(),
+    code: form.code.trim().toUpperCase(),
     email: form.email.trim(),
     phone: form.phone.trim(),
     status: form.status,
@@ -302,6 +300,11 @@ function Branches() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
+    if (!editing && !company?._id) {
+      setFormError("Company information is not loaded yet. Please try again.");
+      return;
+    }
+
     setSaving(true);
     setFormError("");
 
@@ -310,7 +313,7 @@ function Branches() {
         await api.put(`/branches/${editing._id}`, buildPayload());
         setNotice(`"${form.name.trim()}" was updated successfully.`);
       } else {
-        await api.post("/branches", buildPayload());
+        await api.post("/branches", { ...buildPayload(), companyId: company._id });
         setNotice(`"${form.name.trim()}" was added to your branch network.`);
       }
 

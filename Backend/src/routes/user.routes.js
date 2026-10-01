@@ -17,6 +17,11 @@ router.get(
   userController.list
 );
 
+router.post(
+  '/',
+  userController.create
+);
+
 router.get(
   '/:id',
   userController.getById

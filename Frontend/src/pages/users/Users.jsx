@@ -19,7 +19,6 @@ import {
   Users as UsersIcon,
   UserCheck,
   UserX,
-  KeyRound,
   ChevronLeft,
   ChevronRight,
   Filter,
@@ -70,12 +69,6 @@ const EMPTY_FORM = {
   department: '',
   designation: '',
   status: 'active',
-};
-
-const EMPTY_PASSWORD_FORM = {
-  currentPassword: '',
-  newPassword: '',
-  confirmPassword: '',
 };
 
 const getInitials = (name = '') =>
@@ -173,7 +166,6 @@ const Users = () => {
   const [limit] = useState(10);
 
   const [showForm, setShowForm] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
   const [editingUser, setEditingUser] = useState(null);
@@ -181,22 +173,10 @@ const Users = () => {
 
   const [form, setForm] = useState(EMPTY_FORM);
 
-  const [passwordForm, setPasswordForm] = useState(
-    EMPTY_PASSWORD_FORM
-  );
-
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] =
     useState(false);
 
-  const [showCurrentPassword, setShowCurrentPassword] =
-    useState(false);
-
-  const [showNewPassword, setShowNewPassword] =
-    useState(false);
-
-  const [showNewConfirmPassword, setShowNewConfirmPassword] =
-    useState(false);
 
   const [confirmDelete, setConfirmDelete] = useState(null);
 
@@ -458,20 +438,18 @@ const Users = () => {
    * But API needs department ID to fetch designations.
    */
   const updateDepartment = async (value) => {
-    setForm((previous) => ({
-      ...previous,
-      department: value,
-      designation: '',
-    }));
-
-    setDesignations([]);
-
-    if (!value) return;
-
     const selectedDepartment = departments.find(
       (department) =>
         String(department._id) === String(value)
     );
+
+    setForm((previous) => ({
+      ...previous,
+      department: selectedDepartment?.name || value,
+      designation: '',
+    }));
+
+    setDesignations([]);
 
     if (!selectedDepartment?._id) return;
 
@@ -564,6 +542,7 @@ const Users = () => {
 
       if (form.password) {
         payload.password = form.password;
+        payload.confirmPassword = form.confirmPassword;
       }
 
       if (editingUser) {
@@ -591,90 +570,6 @@ const Users = () => {
     } catch (err) {
       setError(
         err.message || 'Unable to save user'
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /*
-   * ---------------------------------------------------------
-   * CHANGE PASSWORD
-   * ---------------------------------------------------------
-   */
-
-  const openPasswordChange = () => {
-    setPasswordForm(EMPTY_PASSWORD_FORM);
-
-    setShowCurrentPassword(false);
-    setShowNewPassword(false);
-    setShowNewConfirmPassword(false);
-
-    setError('');
-    setShowPasswordModal(true);
-  };
-
-  const closePasswordModal = () => {
-    if (saving) return;
-
-    setShowPasswordModal(false);
-
-    setPasswordForm(EMPTY_PASSWORD_FORM);
-
-    setShowCurrentPassword(false);
-    setShowNewPassword(false);
-    setShowNewConfirmPassword(false);
-  };
-
-  const changePassword = async (event) => {
-    event.preventDefault();
-
-    setError('');
-
-    if (!passwordForm.currentPassword) {
-      setError('Current password is required');
-      return;
-    }
-
-    if (passwordForm.newPassword.length < 6) {
-      setError(
-        'New password must be at least 6 characters'
-      );
-      return;
-    }
-
-    if (
-      passwordForm.newPassword !==
-      passwordForm.confirmPassword
-    ) {
-      setError('New passwords do not match');
-      return;
-    }
-
-    if (
-      passwordForm.currentPassword ===
-      passwordForm.newPassword
-    ) {
-      setError(
-        'New password must be different from current password'
-      );
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      await apiRequest('/users/me/password', {
-        method: 'PATCH',
-        body: JSON.stringify(passwordForm),
-      });
-
-      setSuccess('Password changed successfully');
-
-      closePasswordModal();
-    } catch (err) {
-      setError(
-        err.message || 'Unable to change password'
       );
     } finally {
       setSaving(false);
@@ -792,15 +687,6 @@ const Users = () => {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={openPasswordChange}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800"
-            >
-              <KeyRound className="h-4 w-4" />
-              Change Password
-            </button>
-
             <button
               type="button"
               onClick={openCreate}
@@ -1305,12 +1191,16 @@ const Users = () => {
                 </option>
               </Select>
 
-              {/* Create password only */}
-              {!editingUser && (
-                <>
+              <>
+                  {editingUser && (
+                    <p className="text-xs font-medium text-slate-400 sm:col-span-2">
+                      Change Password — leave blank to keep the current password
+                    </p>
+                  )}
+
                   <PasswordInput
-                    label="Password"
-                    required
+                    label={editingUser ? 'New Password' : 'Password'}
+                    required={!editingUser}
                     value={form.password}
                     visible={showPassword}
                     onToggle={() =>
@@ -1327,8 +1217,8 @@ const Users = () => {
                   />
 
                   <PasswordInput
-                    label="Confirm Password"
-                    required
+                    label={editingUser ? 'Confirm New Password' : 'Confirm Password'}
+                    required={!editingUser}
                     value={form.confirmPassword}
                     visible={showConfirmPassword}
                     onToggle={() =>
@@ -1343,8 +1233,7 @@ const Users = () => {
                       )
                     }
                   />
-                </>
-              )}
+              </>
             </div>
 
             <div className="flex justify-end gap-2 border-t border-slate-800 pt-5">
@@ -1367,105 +1256,6 @@ const Users = () => {
                   : editingUser
                     ? 'Update User'
                     : 'Create User'}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* =====================================================
-          PASSWORD MODAL
-      ===================================================== */}
-
-      {showPasswordModal && (
-        <Modal
-          title="Change Password"
-          subtitle="Verify your current password before creating a new password."
-          onClose={closePasswordModal}
-        >
-          <form
-            onSubmit={changePassword}
-            className="space-y-5"
-          >
-            <PasswordInput
-              label="Current Password"
-              required
-              value={passwordForm.currentPassword}
-              visible={showCurrentPassword}
-              onToggle={() =>
-                setShowCurrentPassword(
-                  (value) => !value
-                )
-              }
-              onChange={(value) =>
-                setPasswordForm((previous) => ({
-                  ...previous,
-                  currentPassword: value,
-                }))
-              }
-            />
-
-            <PasswordInput
-              label="New Password"
-              required
-              value={passwordForm.newPassword}
-              visible={showNewPassword}
-              onToggle={() =>
-                setShowNewPassword(
-                  (value) => !value
-                )
-              }
-              onChange={(value) =>
-                setPasswordForm((previous) => ({
-                  ...previous,
-                  newPassword: value,
-                }))
-              }
-            />
-
-            <PasswordInput
-              label="Confirm New Password"
-              required
-              value={passwordForm.confirmPassword}
-              visible={showNewConfirmPassword}
-              onToggle={() =>
-                setShowNewConfirmPassword(
-                  (value) => !value
-                )
-              }
-              onChange={(value) =>
-                setPasswordForm((previous) => ({
-                  ...previous,
-                  confirmPassword: value,
-                }))
-              }
-            />
-
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-500">
-              Password must contain at least 6 characters.
-              Your current password is required for security.
-            </div>
-
-            <div className="flex justify-end gap-2 border-t border-slate-800 pt-5">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={closePasswordModal}
-                className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-50"
-              >
-                <KeyRound className="h-4 w-4" />
-
-                {saving
-                  ? 'Changing...'
-                  : 'Change Password'}
               </button>
             </div>
           </form>

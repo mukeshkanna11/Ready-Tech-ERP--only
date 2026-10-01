@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const User = require('../models/User');
 const Role = require('../models/Role');
@@ -245,6 +246,31 @@ const update = async (req, res, next) => {
 
     const updateData = {};
 
+    if (req.body.password) {
+      const password = String(req.body.password);
+
+      if (password.length < 6) {
+        throw httpError(
+          400,
+          'Password must be at least 6 characters'
+        );
+      }
+
+      if (
+        req.body.confirmPassword !== undefined &&
+        password !== String(req.body.confirmPassword)
+      ) {
+        throw httpError(400, 'Passwords do not match');
+      }
+
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+
+    if (req.body.department !== undefined) {
+      updateData.department =
+        trimmed(req.body.department) || null;
+    }
+
     if (req.body.designation !== undefined) {
       updateData.designation =
         trimmed(req.body.designation) || null;
@@ -441,7 +467,114 @@ const restore = async (req, res, next) => {
   }
 };
 
+const create = async (req, res, next) => {
+  try {
+    const workspaceId = getWorkspaceId(req);
+
+    const name = trimmed(req.body.name);
+    const email = trimmed(req.body.email)?.toLowerCase();
+    const password = req.body.password
+      ? String(req.body.password)
+      : '';
+
+    if (!name) {
+      throw httpError(400, 'Name is required');
+    }
+
+    if (!email) {
+      throw httpError(400, 'Email is required');
+    }
+
+    if (password.length < 6) {
+      throw httpError(
+        400,
+        'Password must be at least 6 characters'
+      );
+    }
+
+    const status = trimmed(req.body.status) || 'active';
+
+    if (!STATUSES.includes(status)) {
+      throw httpError(
+        400,
+        `Status must be one of: ${STATUSES.join(', ')}`
+      );
+    }
+
+    let role;
+    const roleId = trimmed(req.body.roleId);
+
+    if (roleId) {
+      if (!mongoose.Types.ObjectId.isValid(roleId)) {
+        throw httpError(400, 'Invalid role ID');
+      }
+
+      const found = await Role.findOne({
+        _id: roleId,
+        workspaceId,
+        status: 'active',
+      })
+        .select('_id')
+        .lean();
+
+      if (!found) {
+        throw httpError(404, 'Role not found');
+      }
+
+      role = roleId;
+    }
+
+    const exists = await User.exists({
+      companyId: workspaceId,
+      email,
+    });
+
+    if (exists) {
+      throw httpError(
+        409,
+        'Email is already registered for this company'
+      );
+    }
+
+    let user;
+
+    try {
+      user = await User.create({
+        companyId: workspaceId,
+        name,
+        email,
+        password: await bcrypt.hash(password, 10),
+        phone: trimmed(req.body.phone),
+        role,
+        department: trimmed(req.body.department),
+        designation: trimmed(req.body.designation),
+        status,
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        throw httpError(
+          409,
+          'Email is already registered for this company'
+        );
+      }
+
+      throw err;
+    }
+
+    await user.populate('role');
+
+    return res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      data: sanitizeUser(user),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
+  create,
   list,
   getById,
   update,
