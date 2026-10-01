@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Eraser, MessageSquare, SendHorizonal, User } from "lucide-react";
+import { Bot, Eraser, Loader2, MessageSquare, SendHorizonal, User } from "lucide-react";
+import api from "../../services/api";
+import { getApiErrorMessage } from "../../utils/apiError";
 import {
   Button,
   EmptyState,
-  NotConnected,
   PageHeader,
   Panel,
 } from "./aiShared";
@@ -32,6 +33,7 @@ const readHistory = () => {
 const AIAssistant = () => {
   const [messages, setMessages] = useState(readHistory);
   const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -39,22 +41,35 @@ const AIAssistant = () => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
 
-  const send = (text) => {
+  const send = async (text) => {
     const prompt = text.trim();
-    if (!prompt) return;
+    if (!prompt || sending) return;
 
-    const at = new Date().toISOString();
-    setMessages((previous) => [
-      ...previous,
-      { role: "user", text: prompt, at },
-      {
-        role: "system",
-        text: "The AI assistant service is not connected, so no response was generated.",
-        at,
-      },
-    ]);
+    const userMessage = { role: "user", text: prompt, at: new Date().toISOString() };
+    const conversation = [...messages.filter((m) => m.role !== "system"), userMessage];
+
+    setMessages((previous) => [...previous, userMessage]);
     setInput("");
+    setSending(true);
     logActivity("Assistant prompt", prompt.slice(0, 80));
+
+    try {
+      const response = await api.post("/ai/assistant", {
+        messages: conversation.map(({ role, text: body }) => ({ role, text: body })),
+      });
+      setMessages((previous) => [...previous, response.data.data]);
+    } catch (err) {
+      setMessages((previous) => [
+        ...previous,
+        {
+          role: "system",
+          text: getApiErrorMessage(err, "The AI assistant could not respond. Please try again."),
+          at: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      setSending(false);
+    }
   };
 
   const onSubmit = (event) => {
@@ -69,14 +84,12 @@ const AIAssistant = () => {
         title="AI Assistant"
         description="Ask questions about your ERP data in a chat interface."
         actions={
-          <Button onClick={() => setMessages([])} disabled={!messages.length}>
+          <Button onClick={() => setMessages([])} disabled={!messages.length || sending}>
             <Eraser size={14} />
             Clear conversation
           </Button>
         }
       />
-
-      <NotConnected feature="The AI Assistant" />
 
       <div className="grid gap-5 xl:grid-cols-[1fr_280px]">
         <Panel className="flex min-h-[520px] flex-col">
@@ -98,7 +111,9 @@ const AIAssistant = () => {
                         className={`inline-block rounded-2xl px-3.5 py-2.5 text-left text-sm ${
                           isUser
                             ? "bg-cyan-400/[0.12] text-cyan-50"
-                            : "border border-amber-500/15 bg-amber-500/[0.05] text-amber-200/90"
+                            : message.role === "system"
+                              ? "border border-rose-500/20 bg-rose-500/[0.06] text-rose-200"
+                              : "whitespace-pre-wrap border border-white/[0.06] bg-white/[0.03] text-gray-200"
                         }`}
                       >
                         {message.text}
@@ -114,6 +129,12 @@ const AIAssistant = () => {
                 title="Start a conversation"
                 description="Type a question below or pick a suggested action."
               />
+            )}
+            {sending && (
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <Loader2 size={14} className="animate-spin" />
+                Assistant is thinking…
+              </div>
             )}
             <div ref={endRef} />
           </div>
@@ -132,7 +153,7 @@ const AIAssistant = () => {
               placeholder="Ask about sales, stock, approvals… (Enter to send, Shift+Enter for a new line)"
               className="min-h-[44px] flex-1 resize-none rounded-xl border border-white/10 bg-[#070a11] px-3 py-2.5 text-sm text-white outline-none placeholder:text-gray-600 focus:border-cyan-400/30"
             />
-            <Button type="submit" variant="primary" disabled={!input.trim()} className="h-auto self-stretch">
+            <Button type="submit" variant="primary" disabled={!input.trim() || sending} className="h-auto self-stretch">
               <SendHorizonal size={15} />
               <span className="hidden sm:inline">Send</span>
             </Button>

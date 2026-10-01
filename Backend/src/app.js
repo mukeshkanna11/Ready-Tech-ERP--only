@@ -40,6 +40,7 @@ const financialReportRoutes = require("./routes/financialReport.routes");
 const projectRoutes = require("./routes/project.routes");
 const workflowRoutes = require("./routes/workflow.routes");
 const reportsRoutes = require("./routes/reports.routes");
+const aiRoutes = require("./routes/ai.routes");
 
 
 const {
@@ -165,6 +166,7 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/workflows", workflowRoutes);
 
 app.use("/api/reports", reportsRoutes);
+app.use("/api/ai", aiRoutes);
 
 
 // --------------------------------------------------

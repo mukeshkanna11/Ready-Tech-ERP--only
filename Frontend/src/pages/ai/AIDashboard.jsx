@@ -38,7 +38,7 @@ const FEATURES = [
     label: "AI Assistant",
     icon: Bot,
     description: "Chat-style assistant",
-    connected: false,
+    connected: true,
   },
   {
     to: "/ai/summaries",
@@ -59,7 +59,7 @@ const FEATURES = [
     label: "Forecasting",
     icon: TrendingUp,
     description: "Demand and revenue forecasts",
-    connected: false,
+    connected: true,
   },
   {
     to: "/ai/workflow",
@@ -119,7 +119,7 @@ const AIDashboard = () => {
           icon={CheckCircle2}
           label="Features available"
           value={`${FEATURES.filter((f) => f.connected).length} / ${FEATURES.length}`}
-          hint="Backed by existing ERP APIs"
+          hint="Connected to ERP data or AI"
         />
         <StatCard
           icon={GitBranch}
@@ -169,7 +169,7 @@ const AIDashboard = () => {
                     }`}
                   >
                     {connected ? <CheckCircle2 size={10} /> : <PlugZap size={10} />}
-                    {connected ? "Uses ERP data" : "AI service not connected"}
+                    {connected ? "Connected" : "AI service not connected"}
                   </span>
                 </span>
               </Link>
