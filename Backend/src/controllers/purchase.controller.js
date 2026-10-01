@@ -46,6 +46,24 @@ const getPurchaseCompanyId = async (req) => {
 };
 
 /**
+ * Vendors, branches and products may be stored under the
+ * workspace ID or any Company._id in the same workspace.
+ */
+const getPurchaseOwnerIds = async (companyId) => {
+  const company = await Company.findById(companyId)
+    .select('workspaceId')
+    .lean();
+
+  if (!company?.workspaceId) return [companyId];
+
+  const companyIds = await Company.find({
+    workspaceId: company.workspaceId,
+  }).distinct('_id');
+
+  return [company.workspaceId, ...companyIds];
+};
+
+/**
  * Generate next purchase number for the company.
  */
 const generatePurchaseNumber = async (companyId) => {
@@ -327,7 +345,9 @@ const validateItems = async (
       $in: productIds,
     },
 
-    companyId,
+    companyId: {
+      $in: await getPurchaseOwnerIds(companyId),
+    },
 
     deletedAt: null,
 
@@ -442,7 +462,9 @@ const createPurchase = async (
     const vendor =
       await Vendor.findOne({
         _id: vendorId,
-        companyId,
+        companyId: {
+          $in: await getPurchaseOwnerIds(companyId),
+        },
         deletedAt: null,
         status: 'active',
       }).lean();
@@ -469,7 +491,9 @@ const createPurchase = async (
       const branch =
         await Branch.findOne({
           _id: branchId,
-          companyId,
+          companyId: {
+            $in: await getPurchaseOwnerIds(companyId),
+          },
           status: 'active',
         }).lean();
 
@@ -1107,7 +1131,9 @@ const updatePurchase = async (
       const vendor =
         await Vendor.findOne({
           _id: vendorId,
-          companyId,
+          companyId: {
+            $in: await getPurchaseOwnerIds(companyId),
+          },
           deletedAt: null,
           status: 'active',
         }).lean();
@@ -1144,7 +1170,9 @@ const updatePurchase = async (
         const branch =
           await Branch.findOne({
             _id: branchId,
-            companyId,
+            companyId: {
+              $in: await getPurchaseOwnerIds(companyId),
+            },
             status: 'active',
           }).lean();
 

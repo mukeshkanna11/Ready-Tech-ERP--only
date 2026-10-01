@@ -30,6 +30,12 @@ import {
   GitBranch,
   X,
   LogOut,
+  Sparkles,
+  Bot,
+  FileText as FileTextIcon,
+  Lightbulb,
+  TrendingUp,
+  Workflow,
 } from "lucide-react";
 
 import { clearSession } from "../../services/api";
@@ -163,6 +169,15 @@ const NAV_ITEMS = [
 
 ];
 
+const AI_NAV_ITEMS = [
+  { to: "/ai", label: "AI Dashboard", icon: Sparkles, end: true },
+  { to: "/ai/assistant", label: "AI Assistant", icon: Bot },
+  { to: "/ai/summaries", label: "AI Document & Data Summaries", icon: FileTextIcon },
+  { to: "/ai/insights", label: "AI Business Insights", icon: Lightbulb },
+  { to: "/ai/forecasting", label: "AI Forecasting", icon: TrendingUp },
+  { to: "/ai/workflow", label: "AI Workflow Assistance", icon: Workflow },
+];
+
 const readUser = () => {
   try {
     const raw =
@@ -228,6 +243,60 @@ const AppLayout = () => {
     setDrawerOpen(false);
   };
 
+  const renderNavItem = ({
+      to,
+      label,
+      icon: Icon,
+      end,
+    }) => (
+      <li key={to}>
+        <NavLink
+          to={to}
+          end={end}
+          onClick={closeDrawer}
+          className={navClass}
+        >
+          {({ isActive }) => (
+            <>
+              {/* Active indicator */}
+              <span
+                aria-hidden="true"
+                className={`absolute left-0 h-5 w-0.5 rounded-r-full bg-cyan-400 transition-opacity duration-200 ${
+                  isActive
+                    ? "opacity-100"
+                    : "opacity-0"
+                }`}
+              />
+
+              {/* Icon */}
+              <span
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all ${
+                  isActive
+                    ? "bg-cyan-400/[0.08] text-cyan-300"
+                    : "text-gray-500 group-hover:bg-white/[0.04] group-hover:text-gray-200"
+                }`}
+              >
+                <Icon
+                  size={17}
+                  strokeWidth={1.8}
+                />
+              </span>
+
+              {/* Label */}
+              <span className="min-w-0 flex-1 truncate">
+                {label}
+              </span>
+
+              {/* Active dot */}
+              {isActive && (
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.7)]" />
+              )}
+            </>
+          )}
+        </NavLink>
+      </li>
+    );
+
   const sidebar = (
     <div className="flex h-full flex-col border-r border-white/[0.07] bg-[#070a11]">
       {/* Brand */}
@@ -273,61 +342,21 @@ const AppLayout = () => {
         </div>
 
         <ul className="space-y-1">
-          {NAV_ITEMS.map(
-            ({
-              to,
-              label,
-              icon: Icon,
-              end,
-            }) => (
-              <li key={to}>
-                <NavLink
-                  to={to}
-                  end={end}
-                  onClick={closeDrawer}
-                  className={navClass}
-                >
-                  {({ isActive }) => (
-                    <>
-                      {/* Active indicator */}
-                      <span
-                        aria-hidden="true"
-                        className={`absolute left-0 h-5 w-0.5 rounded-r-full bg-cyan-400 transition-opacity duration-200 ${
-                          isActive
-                            ? "opacity-100"
-                            : "opacity-0"
-                        }`}
-                      />
+          {NAV_ITEMS.map(renderNavItem)}
+        </ul>
 
-                      {/* Icon */}
-                      <span
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all ${
-                          isActive
-                            ? "bg-cyan-400/[0.08] text-cyan-300"
-                            : "text-gray-500 group-hover:bg-white/[0.04] group-hover:text-gray-200"
-                        }`}
-                      >
-                        <Icon
-                          size={17}
-                          strokeWidth={1.8}
-                        />
-                      </span>
+        <div className="mb-3 mt-6 flex items-center justify-between px-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-600">
+            AI Content
+          </p>
 
-                      {/* Label */}
-                      <span className="min-w-0 flex-1 truncate">
-                        {label}
-                      </span>
+          <span className="rounded-md border border-cyan-400/15 bg-cyan-400/[0.05] px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-wider text-cyan-400/80">
+            AI
+          </span>
+        </div>
 
-                      {/* Active dot */}
-                      {isActive && (
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.7)]" />
-                      )}
-                    </>
-                  )}
-                </NavLink>
-              </li>
-            )
-          )}
+        <ul className="space-y-1">
+          {AI_NAV_ITEMS.map(renderNavItem)}
         </ul>
       </nav>
 

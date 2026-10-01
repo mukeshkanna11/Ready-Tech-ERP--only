@@ -53,6 +53,51 @@ const getProductCompanyId = async (req) => {
   return company._id.toString();
 };
 
+const ean13CheckDigit = (digits12) => {
+  const sum = digits12
+    .split('')
+    .reduce(
+      (total, digit, index) =>
+        total + Number(digit) * (index % 2 ? 3 : 1),
+      0
+    );
+
+  return String((10 - (sum % 10)) % 10);
+};
+
+const isInvalidEan13 = (barcode) =>
+  /^\d{13}$/.test(barcode) &&
+  ean13CheckDigit(barcode.slice(0, 12)) !== barcode[12];
+
+// Sequential in-store EAN-13 (GS1 prefix 200) per company.
+const generateEan13Barcode = async (companyId) => {
+  const last = await Product.findOne({
+    companyId,
+    barcode: /^200\d{10}$/,
+  })
+    .sort({ barcode: -1 })
+    .select('barcode')
+    .lean();
+
+  let sequence = last
+    ? Number(last.barcode.slice(3, 12)) + 1
+    : 1;
+
+  for (;;) {
+    const body = `200${String(sequence).padStart(9, '0')}`;
+    const candidate = body + ean13CheckDigit(body);
+
+    const taken = await Product.exists({
+      companyId,
+      barcode: candidate,
+    });
+
+    if (!taken) return candidate;
+
+    sequence += 1;
+  }
+};
+
 const normalizeString = (value) => {
   if (value === null || value === undefined) {
     return '';
@@ -394,8 +439,15 @@ const createProduct = async (req, res) => {
     const finalSKU =
       normalizeUpperString(sku);
 
-    const finalBarcode =
+    let finalBarcode =
       normalizeString(barcode);
+
+    if (isInvalidEan13(finalBarcode)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid EAN-13 barcode check digit',
+      });
+    }
 
     const finalUnit =
       normalizeUpperString(unit) ||
@@ -525,7 +577,10 @@ const createProduct = async (req, res) => {
     // Duplicate barcode
     // ----------------------------------------------------------
 
-    if (finalBarcode) {
+    if (!finalBarcode) {
+      finalBarcode =
+        await generateEan13Barcode(companyId);
+    } else {
       const existingBarcode =
         await Product.findOne({
           companyId,
@@ -702,6 +757,13 @@ const getProducts = async (
       companyId,
       deletedAt: null,
     };
+
+    const barcode =
+      normalizeString(req.query.barcode);
+
+    if (barcode) {
+      filter.barcode = barcode;
+    }
 
     // ----------------------------------------------------------
     // STATUS FILTER
@@ -1331,6 +1393,13 @@ const updateProduct = async (
         normalizeString(
           body.barcode
         );
+
+      if (isInvalidEan13(newBarcode)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid EAN-13 barcode check digit',
+        });
+      }
 
       if (
         newBarcode &&

@@ -200,6 +200,16 @@ const validateBranchForWorkspace = async (
 // GET PRODUCT
 // ============================================================
 
+// Products may be stored under the workspace ID or a
+// Company._id that belongs to the workspace.
+const getProductOwnerIds = async (workspaceId) => {
+  const companyIds = await Company.find({
+    workspaceId,
+  }).distinct('_id');
+
+  return [workspaceId, ...companyIds];
+};
+
 const getProductForWorkspace = async (
   productId,
   workspaceId,
@@ -216,7 +226,9 @@ const getProductForWorkspace = async (
 
   let query = Product.findOne({
     _id: productId,
-    companyId: workspaceId,
+    companyId: {
+      $in: await getProductOwnerIds(workspaceId),
+    },
     deletedAt: null,
   }).select(
     '_id companyId branchId productCode sku name displayName productType category brand unit purchasePrice sellingPrice mrp openingStock reorderLevel minimumStock maximumStock status'
@@ -249,7 +261,7 @@ const populateInventory = (query) => {
     .populate({
       path: 'productId',
       select:
-        '_id productCode sku name displayName productType category brand unit purchasePrice sellingPrice mrp reorderLevel minimumStock maximumStock status',
+        '_id productCode sku barcode name displayName productType category brand unit purchasePrice sellingPrice mrp reorderLevel minimumStock maximumStock status',
     })
     .populate({
       path: 'branchId',
@@ -752,8 +764,11 @@ const getInventory = async (
 
       const matchingProducts =
         await Product.find({
-          companyId:
-            workspaceId,
+          companyId: {
+            $in: await getProductOwnerIds(
+              workspaceId
+            ),
+          },
 
           deletedAt: null,
 

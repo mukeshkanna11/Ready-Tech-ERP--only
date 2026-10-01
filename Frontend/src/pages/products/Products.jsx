@@ -988,7 +988,14 @@ const ProductModal = ({
                   </div>
                 </Field>
 
-                <Field label="Barcode">
+                <Field
+                  label="Barcode"
+                  hint={
+                    mode === "create"
+                      ? "Blank = auto EAN-13"
+                      : ""
+                  }
+                >
                   <input
                     value={form.barcode}
                     onChange={(e) =>
@@ -1355,6 +1362,9 @@ const Products = () => {
     useState(null);
 
   const menuRef = useRef(null);
+  const scanBusyRef = useRef(false);
+  const [scanCode, setScanCode] =
+    useState("");
 
   const branchRequestRef =
     useRef(null);
@@ -1641,8 +1651,8 @@ const Products = () => {
         }
 
         if (
-          !menuRef.current.contains(
-            event.target
+          !event.target.closest?.(
+            "[data-product-menu]"
           )
         ) {
           setMenuId(null);
@@ -1892,6 +1902,53 @@ const Products = () => {
       setModalOpen(true);
       setMenuId(null);
       setError("");
+    };
+
+  const handleBarcodeScan =
+    async (event) => {
+      event.preventDefault();
+
+      const code = scanCode.trim();
+
+      if (!code || scanBusyRef.current) {
+        return;
+      }
+
+      scanBusyRef.current = true;
+      setError("");
+      setSuccess("");
+
+      try {
+        const data =
+          await apiRequest(
+            `/products?barcode=${encodeURIComponent(
+              code
+            )}&limit=1`
+          );
+
+        const product =
+          getListData(data).find(
+            (item) =>
+              item.barcode === code
+          );
+
+        if (!product) {
+          setError(
+            `Product not found for barcode ${code}`
+          );
+          return;
+        }
+
+        setScanCode("");
+        openView(product);
+      } catch (err) {
+        setError(
+          err?.message ||
+            "Unable to look up barcode."
+        );
+      } finally {
+        scanBusyRef.current = false;
+      }
     };
 
   const openView =
@@ -2486,6 +2543,31 @@ const Products = () => {
                 )}
               </div>
 
+              {/* Barcode scan */}
+              <form
+                onSubmit={handleBarcodeScan}
+                className="relative lg:w-56"
+              >
+                <Barcode
+                  size={17}
+                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600"
+                />
+
+                <input
+                  value={scanCode}
+                  onChange={(e) =>
+                    setScanCode(
+                      e.target.value
+                    )
+                  }
+                  inputMode="numeric"
+                  autoComplete="off"
+                  aria-label="Scan or enter barcode"
+                  className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#0b0e13] pl-10 pr-3 font-mono text-sm text-white outline-none transition focus:border-white/[0.18] focus:ring-2 focus:ring-white/[0.04] placeholder:font-sans placeholder:text-slate-700"
+                  placeholder="Scan barcode + Enter"
+                />
+              </form>
+
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:w-auto">
                 {/* Status */}
                 <div className="relative">
@@ -2674,6 +2756,9 @@ const Products = () => {
                   <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
                     Code / SKU
                   </th>
+                  <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                    Barcode
+                  </th>
 
                   <th className="px-4 py-3.5 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
                     Type
@@ -2715,7 +2800,7 @@ const Products = () => {
                         className="animate-pulse"
                       >
                         {Array.from({
-                          length: 8,
+                          length: 9,
                         }).map(
                           (
                             __,
@@ -2738,7 +2823,7 @@ const Products = () => {
                   0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="px-6 py-16"
                     >
                       <div className="mx-auto flex max-w-sm flex-col items-center text-center">
@@ -2848,6 +2933,11 @@ const Products = () => {
                             </div>
                           </td>
 
+                          <td className="px-4 py-4 font-mono text-xs text-slate-300">
+                            {product.barcode ||
+                              "—"}
+                          </td>
+
                           <td className="px-4 py-4">
                             <TypeBadge
                               type={
@@ -2955,6 +3045,7 @@ const Products = () => {
                                 ref={
                                   menuRef
                                 }
+                                data-product-menu
                                 className="absolute right-4 top-12 z-40 w-44 overflow-hidden rounded-xl border border-white/[0.08] bg-[#171b22] p-1 shadow-[0_20px_60px_rgba(0,0,0,0.45)]"
                               >
                                 <button
@@ -3198,6 +3289,7 @@ const Products = () => {
                                     ref={
                                       menuRef
                                     }
+                                    data-product-menu
                                     className="absolute right-0 top-9 z-40 w-40 overflow-hidden rounded-xl border border-white/[0.08] bg-[#171b22] p-1 shadow-[0_20px_60px_rgba(0,0,0,0.45)]"
                                   >
                                     <button

@@ -72,6 +72,14 @@ import Reports from "./pages/reports/Reports.jsx";
 
 
 // ==================== LAYOUT ====================
+// ==================== AI CONTENT ====================
+import AIDashboard from "./pages/ai/AIDashboard.jsx";
+import AIAssistant from "./pages/ai/AIAssistant.jsx";
+import AISummaries from "./pages/ai/AISummaries.jsx";
+import AIInsights from "./pages/ai/AIInsights.jsx";
+import AIForecasts from "./pages/ai/AIForecasts.jsx";
+import AIWorkflow from "./pages/ai/AIWorkflow.jsx";
+
 import AppLayout from "./components/layout/AppLayout.jsx";
 
 // ==================== API ====================
@@ -335,6 +343,14 @@ function App() {
           element={<WorkflowDetails />}
         />
 <Route path="/reports" element={<Reports />} />
+
+          {/* AI Content */}
+          <Route path="/ai" element={<AIDashboard />} />
+          <Route path="/ai/assistant" element={<AIAssistant />} />
+          <Route path="/ai/summaries" element={<AISummaries />} />
+          <Route path="/ai/insights" element={<AIInsights />} />
+          <Route path="/ai/forecasting" element={<AIForecasts />} />
+          <Route path="/ai/workflow" element={<AIWorkflow />} />
         {/* ====================================================
             HR MODULE
         ==================================================== */}
