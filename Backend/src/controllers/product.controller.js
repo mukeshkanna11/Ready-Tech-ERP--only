@@ -124,9 +124,29 @@ const validateBranchForCompany = async (
     throw error;
   }
 
+  const sameCompany =
+    branch.companyId &&
+    branch.companyId.toString() === companyId.toString();
+
+  const [branchCompany, currentCompany] = sameCompany
+    ? []
+    : await Promise.all([
+        branch.companyId
+          ? Company.findById(branch.companyId)
+              .select('workspaceId')
+              .lean()
+          : null,
+        Company.findById(companyId)
+          .select('workspaceId')
+          .lean(),
+      ]);
+
   if (
-    !branch.companyId ||
-    branch.companyId.toString() !== companyId.toString()
+    !sameCompany &&
+    (!branchCompany?.workspaceId ||
+      !currentCompany?.workspaceId ||
+      branchCompany.workspaceId.toString() !==
+        currentCompany.workspaceId.toString())
   ) {
     const error = new Error(
       'Branch does not belong to your company'
