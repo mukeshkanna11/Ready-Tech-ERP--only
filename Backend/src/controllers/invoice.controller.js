@@ -1,10 +1,10 @@
 const mongoose = require("mongoose");
 
-const Invoice = require("../models/invoice");
-const Company = require("../models/company");
-const Branch = require("../models/branch");
-const Customer = require("../models/customer");
-const Product = require("../models/product");
+const Invoice = require("../models/Invoice");
+const Company = require("../models/Company");
+const Branch = require("../models/Branch");
+const Customer = require("../models/Customer");
+const Product = require("../models/Product");
 
 const {
   generateInvoicePdf,

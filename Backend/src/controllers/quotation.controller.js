@@ -1,10 +1,10 @@
 const mongoose = require('mongoose');
 
-const Quotation = require('../models/quotation');
-const Company = require('../models/company');
-const Customer = require('../models/customer');
-const Product = require('../models/product');
-const Branch = require('../models/branch');
+const Quotation = require('../models/Quotation');
+const Company = require('../models/Company');
+const Customer = require('../models/Customer');
+const Product = require('../models/Product');
+const Branch = require('../models/Branch');
 
 const getWorkspaceId = (req) => {
   if (!req.companyId) {

@@ -1,10 +1,10 @@
 const mongoose = require("mongoose");
 
-const Payment = require("../models/payment");
-const Invoice = require("../models/invoice");
-const Customer = require("../models/customer");
-const Branch = require("../models/branch");
-const Company = require("../models/company");
+const Payment = require("../models/Payment");
+const Invoice = require("../models/Invoice");
+const Customer = require("../models/Customer");
+const Branch = require("../models/Branch");
+const Company = require("../models/Company");
 
 const getCompany = async (req) => {
   const company = await Company.findOne({

@@ -16,9 +16,9 @@ const asyncHandler = (handler) => (req, res, next) =>
 // ============================================================
 
 const Company = require("../models/Company");
-const Customer = require("../models/customer");
+const Customer = require("../models/Customer");
 const Vendor = require("../models/Vendor");
-const Product = require("../models/product");
+const Product = require("../models/Product");
 const Inventory = require("../models/Inventory");
 const Purchase = require("../models/purchase.model");
 const Sale = require("../models/sales");

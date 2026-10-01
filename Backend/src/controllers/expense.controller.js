@@ -1,9 +1,9 @@
 const mongoose = require("mongoose");
 
-const Expense = require("../models/expense");
-const Company = require("../models/company");
-const Branch = require("../models/branch");
-const Vendor = require("../models/vendor");
+const Expense = require("../models/Expense");
+const Company = require("../models/Company");
+const Branch = require("../models/Branch");
+const Vendor = require("../models/Vendor");
 
 const roundAmount = (value) => {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
